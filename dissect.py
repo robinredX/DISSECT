@@ -3,7 +3,6 @@ import sys
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-# from scaden2.evaluation_metrics import evaluate
 from configs.main_config import config
 from utils.network_fn import network1 as network
 from utils.network_fn import loss
@@ -29,7 +28,6 @@ def run_dissect(config):
     X_real_test = np.array(X_real_test, dtype=np.float32)
     n_features = X_sim_np.shape[1]
     n_celltypes = len(celltypes)
-    #gt = pd.read_table("/Users/robin/dissect/datasets/test/gt/gt_pbmc1.csv", index_col=0)[celltypes]
 
     j=0
     for seed in config["seeds"]:
@@ -105,7 +103,7 @@ def run_dissect(config):
             cons_losses.append(cons_loss)   
             evaluate = False
             if evaluate:
-                #yt, yt_ = np.array(gt), model.predict(normalize_per_batch(X_real_test, n_features))
+                yt, yt_ = np.array(gt), model.predict(normalize_per_batch(X_real_test, n_features))
                 yt, yt_ = gt, model.predict(normalize_per_batch(X_real_test, n_features))
                 yt_ = pd.DataFrame(yt_, columns=celltypes)
                 celltypes_select = [col for col in gt.columns if col!="Unknown"]
