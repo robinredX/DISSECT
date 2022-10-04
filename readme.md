@@ -1,5 +1,9 @@
 # Instructions
 
+# Step 0. Dependencies
+
+Install packages listed in `requirements.txt`. Ideally create a virtual environment or docker image.
+
 # Step 1. Simulation 
 If simulation is not needed, set `simulated` in `configs/main_config.py` to True, and go to step 2.
 

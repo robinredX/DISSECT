@@ -5,3 +5,7 @@ anndata==0.8.0
 h5py==3.6.0
 scanpy==1.9.1
 shap==0.40.0
+Cython==0.29.28
+matplotlib==3.5.0
+setuptools==59.4.0
+tqdm==4.62.3
