@@ -24,4 +24,4 @@ Boxplot with sampled proportions indicate the range of proportions. If you have 
 
 <img src="example_image/boxplot_props_complete.pdf.png" alt="Boxplot of sampled cell type proportions" width="350"/>
 
-Tested on Ubuntu 20.04 and Mac M1. In case of any problem, please open issue.
+Tested on Ubuntu 20.04 and Mac M1.
