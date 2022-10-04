@@ -42,7 +42,7 @@ The averaged deconvolution result (tab seperated txt files) will be stored at `d
 
 ## Step 3.1 Run explainer
 
-This runs `GradientExplainer` from python package `shap` (https://shap-lrjball.readthedocs.io/en/latest/generated/shap.GradientExplainer.html). This allows to caculate approximated SHAP values to attribute contribution of each gene in computing fractions. It should be noted that these are approximations and may not be incorrect. Nonetheless, top genes per cell type based on SHAP values should be enriched for specific cell types.
+This runs `GradientExplainer` from python package `shap` (https://shap-lrjball.readthedocs.io/en/latest/generated/shap.GradientExplainer.html). This allows to caculate approximated SHAP values to attribute contribution of each gene in computing fractions. It should be noted that these are approximations and may not be correct. Nevertheless, top genes per cell type based on SHAP values should be enriched for specific cell types.
 
 Run `python explain.py`
 
