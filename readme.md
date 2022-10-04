@@ -2,7 +2,9 @@
 
 # Step 0. Dependencies
 
-Install packages listed in `requirements.txt`. Ideally create a virtual environment or docker image.
+This repository requires `Python 3.8.x`.
+
+Install packages listed in `requirements.txt` through `pip install -r requirements.txt`. Ideally create a virtual environment or docker image. Read on creating virtual environments here: https://docs.python.org/3.8/library/venv.html
 
 # Step 1. Simulation 
 If simulation is not needed, set `simulated` in `configs/main_config.py` to True, and go to step 2.
@@ -36,7 +38,9 @@ If ensemble predictions are neeeded,
 Run `python ensemble.py`
 The averaged deconvolution result (tab seperated txt files) will be stored at `dissect_fractions_ens.txt` in the `experiment_folder`.
 
-## 2.4 Run explainer
+# Step 3. Quality control
+
+## Step 3.1 Run explainer
 
 This runs `GradientExplainer` from python package `shap` (https://shap-lrjball.readthedocs.io/en/latest/generated/shap.GradientExplainer.html). This allows to caculate approximated shapley values to attribute contribution of each gene in computing fractions. It should be noted that these are approximations and may not be incorrect. Nonetheless, top genes per cell type based on shapley values should be enriched for specific cell types.
 
