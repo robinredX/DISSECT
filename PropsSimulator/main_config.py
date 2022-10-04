@@ -1,10 +1,10 @@
-config = {"experiment_folder": "experiment", # Path to save outputs. Default: expriment
-          "scdata": "sc.h5ad", # Path to sc/snRNA-seq data, should be anndata
+config = {"experiment_folder": "simulation", # Path to save outputs. Default: expriment
+          "scdata": "/data/single_cells/sc_example.h5ad", # Path to sc/snRNA-seq data, should be anndata
           "n_samples": None, # Number of samples to generate. 
                              # Default: 1000 times the number of celltypes,
           "type": "bulk", # Bulk or ST
-          "celltype_col": "cell.type", # Name of the column corresponding to cell-type labels in adata.obs 
-          "batch_col": "batch", # If more than one batches are present, name of the column corrsponding to batch labels in adata.obs
+          "celltype_col": "celltype", # Name of the column corresponding to cell-type labels in adata.obs 
+          "batch_col": None, # If more than one batches are present, name of the column corrsponding to batch labels in adata.obs
           "cells_per_sample": None, # Number of cells to sample to generate one sample. 
                                     # Default 500
           "downsample": None, # If simulation_type is ST, a float is used to downsample counts

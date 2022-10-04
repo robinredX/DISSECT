@@ -3,16 +3,7 @@
 # Step 1. Simulation 
 If simulation is not needed, set `simulated` in `configs/main_config.py` to True, and go to step 2.
 
-If simulation is needed, set `simulated` to False and follow the following steps:
-
-Change path at `reference` to h5ad file containing single-cell or purified bulk data. 
-
-Change simulation_params:
-    `reference_type` to either bulk or sc as needed. Change other parameters as needed.
-
-Run `python simulate.py`
-
-The simulated data will be stored with `name` in the `experiment_folder`.
+If simulation is not needed, go to `PropsSimulator` and follow the instructions for simulation in `readme.md`.
 
 # Step 2. Deconvolution
 
@@ -42,6 +33,8 @@ Run `python ensemble.py`
 The averaged deconvolution result (tab seperated txt files) will be stored at `dissect_fractions_ens.txt` in the `experiment_folder`.
 
 ## 2.4 Run explainer
+
+This runs `GradientExplainer` from python package `shap` (https://shap-lrjball.readthedocs.io/en/latest/generated/shap.GradientExplainer.html). This allows to caculate approximated shapley values to attribute contribution of each gene in computing fractions. It should be noted that these are approximations and may not be incorrect. Nonetheless, top genes per cell type based on shapley values should be enriched for specific cell types.
 
 Run `python explain.py`
 

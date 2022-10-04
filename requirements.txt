@@ -1,6 +1,7 @@
-numpy
-sklearn
-pandas
-anndata
-scanpy
-shap
+numpy==1.19.5
+sklearn==1.1.2
+pandas==1.4.3
+anndata==0.8.0
+h5py==3.6.0
+scanpy==1.9.1
+shap==0.40.0

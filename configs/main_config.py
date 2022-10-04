@@ -1,7 +1,7 @@
 config = {
-    "experiment_folder": "GSE120502_pbmc", 
-    "test_dataset": "GSE120502.txt",
-    "reference": "sim_pbmc.h5ad",
+    "experiment_folder": "experiment", 
+    "test_dataset": "../bulk.txt",
+    "reference": "PropsSimulator/simulation/simulated.h5ad",
     "test_dataset_format": "txt", # Either tab-delimited txt file with genes in rows or h5ad file compatible with Scanpy.
     "test_dataset_type": "bulk", # bulk, microarray or spatial
     "duplicated": "first", # In case, there are duplicated genes in the test_dataset. To use the first occuring gene, write first. To sum the duplicated genes, write sum. To take average, write mean
@@ -28,7 +28,7 @@ config = {
                         "hidden_activation": "relu6", # Activation of hidden layers. Choose ones supported in keras or relu6.
                         "output_activation": "softmax", # Activation of output layer. 
                         "loss": "kldivergence", # Options - kldivergence, l2, l1. KL divergence will only work properly if output activation is softmax.
-                        "n_steps": 6000, # Number of training steps
+                        "n_steps": 5000, # Number of training steps
                         "lr": 1e-5, # Learning rate
                         "batch_size": 64, # best - 64 # batch size
                         "dropout": None # If you would like dropoouts in the model, write a list with same number of elements as n_hidden_layers above corresponding to each dropout layer. 
