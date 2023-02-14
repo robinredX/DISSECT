@@ -1,0 +1,4 @@
+**.c
+**.pyx
+/data
+**/__pycache__
