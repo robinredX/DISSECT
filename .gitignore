@@ -2,3 +2,12 @@
 **.pyx
 /data
 **/__pycache__
+**.so
+**.pdf
+**.o
+**.h5ad
+PropsSimulator/experiment*
+PropsSimulator/simulation/*
+experiment/*
+
+.vscode
