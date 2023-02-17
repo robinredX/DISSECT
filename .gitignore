@@ -10,4 +10,6 @@ PropsSimulator/experiment*
 PropsSimulator/simulation/*
 experiment/*
 
+wandb/
+
 .vscode
