@@ -24,11 +24,11 @@ class CelltypeDeconvolver(nn.Module):
 
 
 class GNNEncoder(nn.Module):
-    def __init__(self, in_channels, latent_dim, num_layers=2, dropout=0.0) -> None:
+    def __init__(self, in_channels, latent_dim, num_layers=2) -> None:
         super().__init__()
         # self.gnn_blocks = ModuleList()
         self.convs = ModuleList()
-        self.linear = Linear(in_channels, latent_dim, bias=False)
+        self.mlp = MLP([in_channels, 512, latent_dim], norm=None, plain_last=True)
         self.act = activation_resolver("relu")
 
         for _ in range(num_layers):
@@ -36,7 +36,7 @@ class GNNEncoder(nn.Module):
 
     def forward(self, x, edge_index, edge_weight=None):
         # first embed input into latent space
-        x = self.linear(x)
+        x = self.mlp(x)
         for conv in self.convs:
             x = conv(x, edge_index, edge_weight)
             x = self.act(x)
