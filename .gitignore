@@ -11,5 +11,6 @@ PropsSimulator/simulation/*
 experiment/*
 
 wandb/
+checkpoints/
 
 .vscode
