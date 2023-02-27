@@ -41,6 +41,11 @@ def dataset(config):
         X_real = pd.read_table(config["test_dataset"], index_col=0)
     elif config["test_dataset_format"] == "h5ad":
         X_real = sc.read(config["test_dataset"])
+        # convert sparse matrix to numpy array
+        try:
+            X_real.X = X_real.X.toarray()
+        except:
+            pass
         X_real = pd.DataFrame(
             X_real.X, index=X_real.obs.index.tolist(), columns=X_real.var_names.tolist()
         ).T
