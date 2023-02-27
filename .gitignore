@@ -12,5 +12,6 @@ experiment/*
 
 wandb/
 checkpoints/
+figures/
 
 .vscode
