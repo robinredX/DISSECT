@@ -75,9 +75,11 @@ def log1p(x):
 def normalize_per_batch(x, n_features, epsilon=1e-8):
     x1 = log1p(x)
     min_, max_ = tf.reduce_min(x1, axis=1), tf.reduce_max(x1, axis=1)
-    min1, max1 = tf.tile(
-        tf.expand_dims(min_, axis=1), tf.constant([1, n_features])
-    ), tf.tile(tf.expand_dims(max_, axis=1), tf.constant([1, n_features]))
+
+    min1 = tf.tile(tf.expand_dims(min_, axis=1), tf.constant([1, n_features]))
+
+    max1 = tf.tile(tf.expand_dims(max_, axis=1), tf.constant([1, n_features]))
+
     x_normed = (x1 - min1) / (
         max1 - min1 + epsilon
     )  # epsilon to avoid dividing by zero
