@@ -8,7 +8,7 @@
 **.h5ad
 PropsSimulator/experiment*
 PropsSimulator/simulation/*
-experiment/*
+experiment**/*
 
 wandb/
 checkpoints/
