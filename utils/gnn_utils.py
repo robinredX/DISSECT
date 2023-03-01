@@ -1,4 +1,5 @@
 import networkx as nx
+import pandas as pd
 import scanpy as sc
 import numpy as np
 from scipy.spatial import distance_matrix
@@ -7,8 +8,14 @@ from torch.utils.data import Dataset
 from torch_geometric.data import Data, InMemoryDataset
 import torch_geometric.utils as pyg_utils
 
+def load_sample_names(path):
+    with open(path, "r") as f:
+        sample_list = f.readlines()
+    sample_list = [x.strip() for x in sample_list][1::]
+    return sample_list
 
-def load_celltypes(path="experiment/datasets/celltypes.txt"):
+
+def load_celltypes(path):
     with open(path, "r") as f:
         cell_type_list = f.readlines()
     cell_type_list = [x.strip() for x in cell_type_list][1::]
@@ -85,6 +92,32 @@ def load_data(
     return st_data, X_real, X_real_train, X_sim, y_sim
 
 
+def load_spatial_data(st_path="data/V1_Mouse_Brain_Sagittal_Anterior.h5ad"):
+    st_data = sc.read_h5ad(st_path)
+    return st_data
+
+
+def load_prepared_data(gene_expr_path="experiment/datasets"):
+    X_real = np.load(f"{gene_expr_path}/X_real_test.npy")
+    X_real_train = np.load(f"{gene_expr_path}/X_real_train.npy")
+    X_sim = np.load(f"{gene_expr_path}/X_sim.npy")
+    y_sim = np.load(f"{gene_expr_path}/y_sim.npy")
+    return X_real, X_real_train, X_sim, y_sim
+
+
+def load_real_groundtruth(path=None, col_order=None):
+    try:
+        if col_order is None:
+            y_real_df = pd.read_csv(path, sep="\t", index_col=0)
+        else:
+            y_real_df = pd.read_csv(path, sep="\t", index_col=0)[col_order]
+        y_real = y_real_df.to_numpy()
+        return y_real, y_real_df
+    except Exception as e:
+        print(e)
+        return None
+
+
 def compute_graph_list(graph, X_sim, y_sim, p=0.5, test=False):
     num_sims = X_sim.shape[0]
     num_nodes = graph.num_nodes
@@ -124,6 +157,7 @@ def prepare_graph_dataset(
     p=0.5,
     sample_sugraphs=True,
     test=False,
+    y_real=None,
 ):
     coords, dist_mat, adj_mat = construct_spatial_graph(
         st_data.obsm["spatial"].copy(), radius=radius
@@ -151,40 +185,61 @@ def prepare_graph_dataset(
     else:
         # convert fullgraph to pytorch geometric graph and share edge index and node features
         full_graph = pyg_utils.from_networkx(full_graph)
+        if y_real is not None:
+            full_graph.y = torch.Tensor(y_real)
         data_list = [
             compute_graph_list(full_graph, X_sim, y_sim, p=p, test=test)
             for _ in range(num_samples)
         ]
-
     return data_list
 
 
 def prepare_dataset(
-    st_data,
     X_real_train,
     X_sim,
     y_sim,
+    y_real=None,
+    st_data=None,
 ):
     size = X_real_train.shape[0]
-    coords = normalize_coords(st_data.obsm["spatial"].copy())
-    # repeat along axis 0
-    coords = np.tile(coords, ((size // coords.shape[0]) + 1, 1))[0:size, :]
+    # check whether coordinates available
+    if st_data is not None:
+        coords = normalize_coords(st_data.obsm["spatial"].copy())
+        # repeat along axis 0
+        coords = np.tile(coords, ((size // coords.shape[0]) + 1, 1))[0:size, :]
+        coords = torch.Tensor(coords)
 
     X_real_train = torch.Tensor(X_real_train)
     X_sim = torch.Tensor(X_sim)
     y_sim = torch.Tensor(y_sim)
-    coords = torch.Tensor(coords)
+    if y_real is not None:
+        y_real = np.tile(y_real, ((size // y_real.shape[0]) + 1, 1))[0:size, :]
+        y_real = torch.Tensor(y_real)
 
     # convert this into one big datalist
     data_list = []
     for i in range(X_real_train.shape[0]):
         x_real = X_real_train[i, :][None, :]
         x_sim = X_sim[i, :][None, :]
-        y_sim_ = y_sim[i, :][None, :]
-        pos = coords[i, :][None, :]
-        fake_pos = torch.zeros((1, 2)) - 1
-        g_real = Data(x=x_real, pos=pos, edge_index=None, edge_weight=None)
-        g_sim = Data(x=x_sim, y=y_sim_, pos=fake_pos, edge_index=None)
+        y_sim_sub = y_sim[i, :][None, :]
+
+        # check whether ground truth available for real data
+        if y_real is not None:
+            y_real_sub = y_real[i, :][None, :]
+        else:
+            y_real_sub = None
+
+        # check whether coordinates available
+        if st_data is not None:
+            pos = coords[i, :][None, :]
+            fake_pos = torch.zeros((1, 2)) - 1
+        else:
+            pos = None
+            fake_pos = None
+        g_real = Data(
+            x=x_real, y=y_real_sub, pos=pos, edge_index=None, edge_weight=None
+        )
+        g_sim = Data(x=x_sim, y=y_sim_sub, pos=fake_pos, edge_index=None)
         data_list.append([g_real, g_sim])
     return data_list
 
