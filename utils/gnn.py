@@ -26,8 +26,8 @@ class Dissect(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         self.reset_parameters()
 
-    def forward(self, x, edge_index=None, edge_weight=None):
-        x = self.mlp(x[:, 0:-2])
+    def forward(self, x, edge_index=None, edge_weight=None, pos=None):
+        x = self.mlp(x)
         x = self.softmax(x)
         return x
 
@@ -65,6 +65,7 @@ class GNNEncoder(nn.Module):
         plain_last=True,
         parallel_channels=1,
         act="relu",
+        use_spatial=True,
     ) -> None:
         super().__init__()
         self.spatial_convs = ModuleList()
@@ -75,6 +76,7 @@ class GNNEncoder(nn.Module):
         self.act = activation_resolver(act)
         self.plain_last = plain_last
         self.parallel_channels = parallel_channels
+        self.use_spatial = use_spatial
 
         for _ in range(num_layers):
             self.spatial_convs.append(GCNConv(latent_dim, latent_dim, improved=False))
@@ -105,8 +107,11 @@ class GNNEncoder(nn.Module):
         out = init_embed
         return out
 
-    def forward(self, x, edge_index, edge_weight=None):
+    def forward(self, x, edge_index, edge_weight=None, pos=None):
         # first embed input into latent space
+        # if position available concatenate with node features
+        if pos is not None and self.use_spatial:
+            x = torch.cat([x, pos], dim=-1)
         init_embed = self.mlp(x)
         # init_embed.shape = (batch*num_nodes, latent_dim)
 

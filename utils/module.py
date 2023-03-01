@@ -1,6 +1,7 @@
 from typing import Any
 import io
 import wandb
+import pandas as pd
 import PIL
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,30 +13,34 @@ from torch_geometric.data import Data
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 
+from utils.utils import calc_mean_corr, calc_mean_rmse
+
 
 class DeconvolutionModel(pl.LightningModule):
     def __init__(
         self,
         net,
-        node_positions=True,
-        spatial_data=None,
-        celltype_list=None,
         weight_decay=0.0,
         l1_lambda=1e-5,
         l2_lambda=1e-5,
+        celltype_names=None,
+        sample_names=None,
+        spatial_data=None,
     ):
         super().__init__()
         self.net = net
-        self.node_positions = node_positions
         self.weight_decay = weight_decay
         self.l1_lambda = l1_lambda
         self.l2_lambda = l2_lambda
         # this accesses the init parameters of the model
-        self.save_hyperparameters(ignore=["net", "spatial_data", "celltype_list"])
-        # self.alpha = 0.5
-        # self.lambda_ = 0.5
-        self.st_data = spatial_data.copy()
-        self.celltype_list = celltype_list
+        self.save_hyperparameters(ignore=["net", "spatial_data", "celltype_names"])
+        # only used for plotting during validation
+        if spatial_data is not None:
+            self.st_data = spatial_data.copy()
+        else:
+            self.st_data = None
+        self.celltype_names = celltype_names
+        self.sample_names = sample_names
 
     def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
         # https://pytorch-lightning.readthedocs.io/en/stable/guides/speed.html
@@ -53,8 +58,7 @@ class DeconvolutionModel(pl.LightningModule):
 
     def forward(self, graph):
         graph.x = normalize_per_sample(graph.x, with_pos=False)
-        graph.x = torch.cat([graph.x, graph.pos], dim=1)
-        y_hat = self.net(graph.x, graph.edge_index, graph.edge_weight)
+        y_hat = self.net(graph.x, graph.edge_index, graph.edge_weight, pos=graph.pos)
         return y_hat
 
     # by default runs the forward method
@@ -106,27 +110,52 @@ class DeconvolutionModel(pl.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         # TODO put into callback
-        if self.st_data is not None and self.celltype_list is not None:
-            result = self(val_batch[0])
-            cell_type_indices = np.array(np.argmax(result.cpu().numpy(), axis=1))
-            # map celltypes onto cdelltype list
-            cell_types = [self.celltype_list[i] for i in cell_type_indices]
+        data = val_batch[0]
+        y_hat = self(data)
+        y = data.y
+        if self.st_data is not None and self.celltype_names is not None:
+            celltype_indices = np.array(
+                np.argmax(y_hat.cpu().detach().numpy(), axis=1)
+            )
+            # map celltypes onto celltype list
+            pred_celltypes = [self.celltype_names[i] for i in celltype_indices]
             # add new column to adata
-            self.st_data.obs["celltype"] = cell_types
+            self.st_data.obs["celltype"] = pred_celltypes
             fig, ax = plt.subplots(1, 1, figsize=(5, 5))
             sq.pl.spatial_scatter(self.st_data, color=["celltype"], ax=ax)
             pil_img = buffer_plot_and_get(fig)
             plt.close(fig)
             self.logger.log_image(
-                key="predictions",
+                key="validation",
                 images=[wandb.Image(pil_img)],
                 caption=[f"Current epoch: {self.current_epoch}"],
             )
-            # self.logger.log_table(key="prediction", columns=log_columns, data=log_data)
             del self.st_data.uns["celltype_colors"]
-            return result
-        else:
-            return None
+
+        # check if we have ground truth
+        if y is not None:
+            rmse, mean_corr = compare_with_gt(
+                y_hat.cpu().detach().numpy(), y.cpu().detach().numpy()
+            )
+            self.log("validation/mean_rmse", rmse)
+            self.log("validation/mean_corr", mean_corr)
+        # in any case save predictions
+        y_hat_df = pd.DataFrame(y_hat.cpu().detach().numpy())
+        if self.celltype_names is not None:
+            y_hat_df.columns = self.celltype_names
+        if self.sample_names is not None:
+            y_hat_df["sample_names"] = self.sample_names
+        self.logger.log_table(f"predictions-step-{self.global_step}", dataframe=y_hat_df)
+        return y_hat
+
+
+def compare_with_gt(y_hat, y):
+    # y_hat:.shape (n_samples, n_celltypes)
+    # average rmse cell type wise
+    rmse = np.mean(np.sqrt(np.mean(np.square((y_hat - y)), axis=0)))
+    mean_rmse = calc_mean_rmse(y_hat, y)[0]
+    mean_corr = calc_mean_corr(y_hat, y)[0]
+    return rmse, mean_corr
 
 
 def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha):
