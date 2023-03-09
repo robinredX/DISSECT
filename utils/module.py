@@ -26,14 +26,18 @@ class DeconvolutionModel(pl.LightningModule):
         celltype_names=None,
         sample_names=None,
         spatial_data=None,
+        sim_loss_fn="kl_div",
     ):
         super().__init__()
         self.net = net
         self.weight_decay = weight_decay
         self.l1_lambda = l1_lambda
         self.l2_lambda = l2_lambda
+        self.sim_loss_fn = sim_loss_fn
         # this accesses the init parameters of the model
-        self.save_hyperparameters(ignore=["net", "spatial_data", "celltype_names"])
+        self.save_hyperparameters(
+            ignore=["net", "spatial_data", "sample_names", "celltype_names"]
+        )
         # only used for plotting during validation
         if spatial_data is not None:
             self.st_data = spatial_data.copy()
@@ -58,7 +62,14 @@ class DeconvolutionModel(pl.LightningModule):
 
     def forward(self, graph):
         graph.x = normalize_per_sample(graph.x, with_pos=False)
-        y_hat = self.net(graph.x, graph.edge_index, graph.edge_weight, pos=graph.pos)
+        y_hat = self.net(
+            graph.x,
+            graph.edge_index,
+            graph.edge_weight,
+            graph.edge_attr,
+            pos=graph.pos,
+            batch=graph.batch,
+        )
         return y_hat
 
     # by default runs the forward method
@@ -74,7 +85,11 @@ class DeconvolutionModel(pl.LightningModule):
         alpha = alpha_scheduler(self.global_step)
         g_mix = Data(
             x=alpha * g_real.x + (1 - alpha) * g_sim.x,
+            edge_index=g_real.edge_index,
+            edge_weight=g_real.edge_weight,
+            edge_attr=g_real.edge_attr,
             pos=g_real.pos,
+            batch=g_real.batch,
         )
 
         # simulated ground truth celltype abundances
@@ -89,7 +104,9 @@ class DeconvolutionModel(pl.LightningModule):
         # should be done in a callback
         beta = beta_scheduler(self.global_step)
 
-        sim_loss, mix_loss = calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha)
+        sim_loss, mix_loss = calc_loss(
+            y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn
+        )
 
         total_loss = sim_loss + beta * mix_loss
         # optionally add l1 and l2 regularization
@@ -114,9 +131,7 @@ class DeconvolutionModel(pl.LightningModule):
         y_hat = self(data)
         y = data.y
         if self.st_data is not None and self.celltype_names is not None:
-            celltype_indices = np.array(
-                np.argmax(y_hat.cpu().detach().numpy(), axis=1)
-            )
+            celltype_indices = np.array(np.argmax(y_hat.cpu().detach().numpy(), axis=1))
             # map celltypes onto celltype list
             pred_celltypes = [self.celltype_names[i] for i in celltype_indices]
             # add new column to adata
@@ -134,10 +149,10 @@ class DeconvolutionModel(pl.LightningModule):
 
         # check if we have ground truth
         if y is not None:
-            rmse, mean_corr = compare_with_gt(
+            mean_rmse, mean_corr = compare_with_gt(
                 y_hat.cpu().detach().numpy(), y.cpu().detach().numpy()
             )
-            self.log("validation/mean_rmse", rmse)
+            self.log("validation/mean_rmse", mean_rmse)
             self.log("validation/mean_corr", mean_corr)
         # in any case save predictions
         y_hat_df = pd.DataFrame(y_hat.cpu().detach().numpy())
@@ -145,29 +160,39 @@ class DeconvolutionModel(pl.LightningModule):
             y_hat_df.columns = self.celltype_names
         if self.sample_names is not None:
             y_hat_df["sample_names"] = self.sample_names
-        self.logger.log_table(f"predictions-step-{self.global_step}", dataframe=y_hat_df)
+        self.logger.log_table(
+            f"predictions-step-{self.global_step}", dataframe=y_hat_df
+        )
         return y_hat
 
 
 def compare_with_gt(y_hat, y):
     # y_hat:.shape (n_samples, n_celltypes)
     # average rmse cell type wise
-    rmse = np.mean(np.sqrt(np.mean(np.square((y_hat - y)), axis=0)))
     mean_rmse = calc_mean_rmse(y_hat, y)[0]
     mean_corr = calc_mean_corr(y_hat, y)[0]
-    return rmse, mean_corr
+    return mean_rmse, mean_corr
 
 
-def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha):
+def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn="kl_div"):
     # compute mixture ground truth
     y_mix = alpha * y_hat_real + (1 - alpha) * y_hat_sim
     # calc kl divergence
     # requires log probabilities for the predicted input
-    sim_loss = F.kl_div(
-        torch.log(y_hat_sim),
-        y_sim,
-        reduction="batchmean",
-    )
+    if sim_loss_fn == "kl_div":
+        sim_loss = F.kl_div(
+            torch.log(y_hat_sim),
+            y_sim,
+            reduction="batchmean",
+        )
+    elif sim_loss_fn == "mse":
+        sim_loss = F.mse_loss(y_hat_sim, y_sim)
+    elif sim_loss_fn == "cross_entropy":
+        sim_loss = F.cross_entropy(y_hat_sim, y_sim)
+    elif sim_loss_fn == "js_div":
+        raise NotImplementedError("JS divergence not implemented")
+    else:
+        raise ValueError(f"sim_loss_fn {sim_loss_fn} not implemented")
     # calc mse
     mix_loss = F.mse_loss(y_mix, y_hat_mix)
     return sim_loss, mix_loss
@@ -197,14 +222,15 @@ def alpha_scheduler(step, min_val=0.1, max_val=0.9, max_steps=2000):
     return alpha
 
 
-def beta_scheduler(step):
-    max_steps = 5000
-    if step < 0.4 * max_steps:
+def beta_scheduler(
+    step, phase_1=0.4, phase_2=0.8, phase_1_val=15, phase_2_val=10, max_steps=5000
+):
+    if step < phase_1 * max_steps:
         return 0.0
-    elif (step >= 0.4 * max_steps) and (step < 0.8 * max_steps):
-        return 15
+    elif (step >= phase_1 * max_steps) and (step < phase_2 * max_steps):
+        return phase_1_val
     else:
-        return 10
+        return phase_2_val
 
 
 def buffer_plot_and_get(fig):
