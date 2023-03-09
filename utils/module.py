@@ -23,6 +23,7 @@ class DeconvolutionModel(pl.LightningModule):
         weight_decay=0.0,
         l1_lambda=1e-5,
         l2_lambda=1e-5,
+        beta=None,
         celltype_names=None,
         sample_names=None,
         spatial_data=None,
@@ -45,6 +46,7 @@ class DeconvolutionModel(pl.LightningModule):
             self.st_data = None
         self.celltype_names = celltype_names
         self.sample_names = sample_names
+        self.beta = beta
 
     def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
         # https://pytorch-lightning.readthedocs.io/en/stable/guides/speed.html
@@ -102,13 +104,14 @@ class DeconvolutionModel(pl.LightningModule):
 
         # change loss function based on global step
         # should be done in a callback
-        beta = beta_scheduler(self.global_step)
+        if self.beta is None:
+            self.beta = beta_scheduler(self.global_step)
 
         sim_loss, mix_loss = calc_loss(
             y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn
         )
 
-        total_loss = sim_loss + beta * mix_loss
+        total_loss = sim_loss + self.beta * mix_loss
         # optionally add l1 and l2 regularization
         l1_loss = ln_loss(self.net, n=1, ln_lambda=self.l1_lambda, only_matrices=True)
         self.log("train/l1_loss", l1_loss)
