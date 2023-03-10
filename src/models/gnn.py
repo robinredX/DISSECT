@@ -13,36 +13,6 @@ from torch.nn import MultiheadAttention
 from torch_geometric.nn import knn_graph
 
 
-class Dissect(nn.Module):
-    def __init__(
-        self, num_genes, num_celltypes, channel_list=[512, 256, 128, 64], act="relu6"
-    ) -> None:
-        super().__init__()
-        channel_list = [num_genes] + channel_list + [num_celltypes]
-        self.mlp = self.mlp = MLP(
-            channel_list,
-            norm=None,
-            plain_last=True,
-            act=act,
-        )
-        self.softmax = nn.Softmax(dim=1)
-        self.reset_parameters()
-
-    def forward(
-        self, x, edge_index=None, edge_weight=None, edge_attr=None, pos=None, batch=None
-    ):
-        x = self.mlp(x)
-        x = self.softmax(x)
-        return x
-
-    def reset_parameters(self):
-        for w in self.parameters():
-            if len(w.shape) == 1:
-                zeros(w)
-            else:
-                glorot(w)
-
-
 class DissectSpatial(nn.Module):
     def __init__(
         self,
@@ -160,6 +130,7 @@ class BiChannelGNNBlock(nn.Module):
         cosine=False,
         use_pos=True,
         fusion="concat",
+        sim_layer=False,
     ) -> None:
         super().__init__()
         self.spatial_conv = GATv2Conv(
@@ -170,19 +141,14 @@ class BiChannelGNNBlock(nn.Module):
             add_self_loops=False,
             **spatial_conv_kwargs
         )
+        # extra conv with just self loops for simulated data
+        if sim_layer:
+            self.spatial_lin = nn.Linear(latent_dim, latent_dim)
+        self.sim_layer = sim_layer
         self.activation = activation_resolver(activation)
-        # self.spatial_linear = nn.LazyLinear(latent_dim)
+        
         # self.latent_conv = GATv2Conv(
         #     latent_dim, latent_dim, num_heads, edge_dim=1, **latent_conv_kwargs
-        # )
-        # self.classic_mlp = MLP(
-        #     in_channels=latent_dim,
-        #     hidden_channels=latent_dim,
-        #     out_channels=int(latent_dim * num_heads),
-        #     num_layers=2,
-        #     norm=None,
-        #     plain_last=False,
-        #     act=activation,
         # )
         # without latent graph construction
         # self.latent_conv = MultiheadAttention(
@@ -192,6 +158,7 @@ class BiChannelGNNBlock(nn.Module):
         #     batch_first=True,
         #     **latent_conv_kwargs
         # )
+        
 
         if fusion == "concat":
             self.concat_linear = nn.LazyLinear(latent_dim)
@@ -235,14 +202,10 @@ class BiChannelGNNBlock(nn.Module):
         # out_latent = self.latent_conv(x, latent_edge_index)
 
         # TODO: check if conv takes edge weights or edge attributes
-        out_spatial = self.spatial_conv(x, edge_index, edge_attr=edge_attr)
-        # out_spatial = self.activation(out_spatial)
-        # out_spatial = self.spatial_linear(out_spatial)
-
-        # if edge_attr is not None:
-        #     out_spatial = self.spatial_conv(x, edge_index, edge_attr=edge_attr)
-        # else:
-        #     out_spatial = self.classic_mlp(x)
+        if self.sim_layer and edge_attr is None:
+            out_spatial = self.spatial_lin(x)
+        else:
+            out_spatial = self.spatial_conv(x, edge_index, edge_attr=edge_attr)
 
         if self.fusion == "gating":
             out = self.gate(x, out_spatial)
@@ -257,9 +220,9 @@ class BiChannelGNNBlock(nn.Module):
             out = self.activation(out)
 
         # perform normalization and feed forward
-        # out = self.norm1(out)
-        # out_ffn = self.ffn(out)
-        # out = self.norm2(out + out_ffn)
+        out = self.norm1(out)
+        out_ffn = self.ffn(out)
+        out = self.norm2(out + out_ffn)
 
         return out
 
@@ -327,5 +290,3 @@ class CelltypeDecoder(nn.Module):
         x = self.softmax(x)
 
         return x
-
-
