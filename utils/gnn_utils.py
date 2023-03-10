@@ -3,10 +3,12 @@ import pandas as pd
 import scanpy as sc
 import numpy as np
 from scipy.spatial import distance_matrix
+import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import Dataset
 from torch_geometric.data import Data, InMemoryDataset
 import torch_geometric.utils as pyg_utils
+
 
 def load_sample_names(path):
     with open(path, "r") as f:
@@ -40,24 +42,26 @@ def construct_spatial_graph(coords, radius=0.02):
     return np.float32(coords), np.float32(dist_mat), np.float32(adj_mat)
 
 
-def construct_networkx_graph(coords, dist_mat, adj_mat, X_real):
-    full_graph = nx.from_numpy_array(adj_mat)
+def construct_networkx_graph(coords, dist_mat, adj_mat, X_real=None):
+    graph = nx.from_numpy_array(adj_mat)
     # remove edge weights
-    for edge in full_graph.edges:
-        del full_graph.edges[edge]["weight"]
+    for edge in graph.edges:
+        del graph.edges[edge]["weight"]
     nx.set_edge_attributes(
-        full_graph, {(i, j): dist_mat[i, j] for i, j in full_graph.edges}, "edge_weight"
+        graph, {(i, j): dist_mat[i, j] for i, j in graph.edges}, "edge_weight"
     )
-    nx.set_node_attributes(
-        full_graph, {i: coords[i] for i in range(coords.shape[0])}, "pos"
+    nx.set_edge_attributes(
+        graph, {(i, j): np.array([dist_mat[i, j]]) for i, j in graph.edges}, "edge_attr"
     )
+    nx.set_node_attributes(graph, {i: coords[i] for i in range(coords.shape[0])}, "pos")
     # also add real gene expression as node attributes
-    nx.set_node_attributes(
-        full_graph,
-        {i: x for i, x in enumerate(X_real)},
-        "x",
-    )
-    return full_graph
+    if X_real is not None:
+        nx.set_node_attributes(
+            graph,
+            {i: x for i, x in enumerate(X_real)},
+            "x",
+        )
+    return graph
 
 
 def sample_k_hop_subgraph(graph, k=5):
@@ -67,6 +71,17 @@ def sample_k_hop_subgraph(graph, k=5):
     # select k hop neighborhood
     subgraph = nx.ego_graph(graph, node, radius=k)
     return subgraph
+
+
+def check_radius(raw_coords, radius=0.02, num_hops=1):
+    coords = normalize_coords(raw_coords)
+    graph = construct_networkx_graph(*construct_spatial_graph(coords, radius=radius))
+    print(f"Radius: {radius}")
+    print(f"Number of nodes: {graph.number_of_nodes()}")
+    print(f"Number of edges: {graph.number_of_edges()}")
+    subgraph = sample_k_hop_subgraph(graph, 1)
+    nx.draw(subgraph, pos=nx.get_node_attributes(subgraph, "pos"), node_size=10)
+    plt.show()
 
 
 def split_graph(graph, num_nodes=64):
@@ -118,7 +133,7 @@ def load_real_groundtruth(path=None, col_order=None):
         return None
 
 
-def compute_graph_list(graph, X_sim, y_sim, p=0.5, test=False):
+def compute_graph_list(graph, X_sim, y_sim, p=0.0, test=False):
     num_sims = X_sim.shape[0]
     num_nodes = graph.num_nodes
 
@@ -137,6 +152,10 @@ def compute_graph_list(graph, X_sim, y_sim, p=0.5, test=False):
         # define custom edge index instead of the spatial one
         # e.g. fully connected or no connections or random
         sim_edge_index = pyg_utils.erdos_renyi_graph(num_nodes, p, directed=False)
+        # always add self loops
+        loop_index = torch.arange(0, num_nodes, dtype=torch.long)
+        loop_index = loop_index.unsqueeze(0).repeat(2, 1)
+        sim_edge_index = torch.cat([sim_edge_index, loop_index], dim=1)
         sim_graph = Data(
             x=x_sim, edge_index=sim_edge_index, pos=fake_pos, y=y_sim_slice
         )
