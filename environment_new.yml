@@ -1,4 +1,4 @@
-name: dissect-spatial
+name: dissect_spatial
 channels:
   - pyg
   - pytorch
@@ -161,10 +161,12 @@ dependencies:
       - lightning-utilities==0.6.0.post0
       - llvmlite==0.38.1
       - locket==1.0.0
+      - markdown-it-py==2.2.0
       - markupsafe==2.1.2
       - matplotlib==3.6.3
       - matplotlib-inline==0.1.6
       - matplotlib-scalebar==0.8.1
+      - mdurl==0.1.2
       - mistune==2.0.5
       - multidict==6.0.4
       - mypy-extensions==1.0.0
@@ -204,8 +206,10 @@ dependencies:
       - pydantic==1.10.4
       - pygments==2.14.0
       - pynndescent==0.5.8
+      - pyrootutils==1.0.4
       - pyrsistent==0.19.3
       - python-dateutil==2.8.2
+      - python-dotenv==1.0.0
       - python-json-logger==2.0.6
       - pytorch-lightning==1.9.1
       - pytz==2022.7.1
@@ -214,6 +218,7 @@ dependencies:
       - pyzmq==25.0.0
       - rfc3339-validator==0.1.4
       - rfc3986-validator==0.1.1
+      - rich==13.3.1
       - scanpy==1.9.1
       - scikit-image==0.19.3
       - scikit-learn==1.2.1
@@ -247,7 +252,7 @@ dependencies:
       - umap-learn==0.5.3
       - uri-template==1.2.0
       - validators==0.20.0
-      - wandb==0.13.10
+      - wandb==0.13.11
       - wcwidth==0.2.6
       - webcolors==1.12
       - webencodings==0.5.1
@@ -260,4 +265,4 @@ dependencies:
       - ypy-websocket==0.8.2
       - zarr==2.14.1
       - zipp==3.13.0
-prefix: /root/miniconda3/envs/dissect-spatial
+prefix: /root/miniconda3/envs/dissect_spatial
