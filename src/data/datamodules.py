@@ -26,7 +26,7 @@ class SpatialDataModule(LightningDataModule):
         super().__init__()
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
-        self.save_hyperparameters(logger=False)
+        self.save_hyperparameters()
         
         self.st_data = load_spatial_data(self.hparams.st_path)
         self.X_real, self.X_real_train, self.X_sim, self.y_sim = load_prepared_data(
