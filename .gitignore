@@ -15,3 +15,5 @@ checkpoints/
 figures/
 
 .vscode
+
+**/media
