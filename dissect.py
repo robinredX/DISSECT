@@ -30,7 +30,7 @@ def run_dissect(config):
     n_celltypes = len(celltypes)
 
     j=0
-    for seed in config["seeds"]:
+    for seed in range(len(config["models"])):
         print("Starting training model {}".format(j))
         #reproducibility(seed)
 
@@ -137,14 +137,10 @@ def run_dissect(config):
             step+=1
             pbar.set_description("step: %d| Losses - total_loss: %.4f | reg_loss: %.4f | cons_loss: %.4f"%(step, loss_, reg_loss, cons_loss))                
             
-            #pbar.set_description("step: %d| Losses - total_loss: %.4f | reg_loss: %.4f | cons_loss: %.4f"%(step, loss_, reg_loss, cons_loss))
-
         model_path = os.path.join(config["experiment_folder"], "model_{}".format(j))
         model.save(model_path)
 
-        #model = network(config["network_params"], n_celltypes, n_features)
         model_p = tf.keras.models.load_model(model_path)
-        #model.load_weights(model_path)
 
         print("Running deconvolution")
         y_hat = model_p.predict(normalize_per_batch(X_real_test, n_features))

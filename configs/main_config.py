@@ -8,18 +8,8 @@ config = {
     "normalize_simulated": "cpm", #"cpm", # Only CPM and None is supported. Write CPM if not already TPM/CPM.
     "normalize_test": "cpm", # Write CPM if not already TPM/CPM
     "var_cutoff": 0.1, # variance cutoff for gene filtering
-    "test_in_mix": None, # Number of test samples to use in the generation of online mixtures.
+    "test_in_mix": None, # Number of test samples to use in the generation of online mixtures. None uses all samples.
     "simulated": True, # True if dataset is already simulated. False, if it is a single-cell dataset.
-    "simulation_params": {"n_samples": 5000, # Number of simulations to do
-                         "sparse": 0.5, # Proportion of simulations of sparse samples (purified cell populations)
-                         "reference_type": "sc", # sc or bulk
-                         "unknown": None,
-                         "normalize": "cpm",
-                         "name": "liver_tumor", # Simulated data will be saved as pbmc8k.
-                         "downsample": None,
-                         "cells_range": [8,15], # If variable cells per sample. Used for ST simulation.
-                         "celltypes_range": [1,6]
-                         },
     "sig_matrix": False,
     "mix": "srm",
     "save_config": True,
@@ -36,5 +26,5 @@ config = {
     }, # Parameters to use to build network. 
     "alpha_range": [0.1,0.9], # Alpha parameter to create mixtures per batch is uniformly sampled between these two values
     "normalization_per_batch": "log1p-MinMax", # normalization of batches. Only per log1p-MinMax or None are supported
-    "seeds": [1,2,3,4,5],
+    "models": [1,2,3,4,5],
 }

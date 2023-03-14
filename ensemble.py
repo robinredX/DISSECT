@@ -9,7 +9,7 @@ def ensemble(config):
         sys.exit("Path {} does not exist. Please run prepare_data.py and dissect.py before.".format(experiment_path))
 
     i=0
-    for i in range(len(config["seeds"])):
+    for i in range(len(config["models"])):
         df_curr = pd.read_table(os.path.join(config["experiment_folder"], "dissect_fractions_{}.txt".format(i)), index_col=0)
         if i==0:
             df_ens = df_curr
