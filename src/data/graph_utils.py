@@ -100,6 +100,11 @@ def check_radius(raw_coords, radius=0.02, num_hops=1):
     print(f"Radius: {radius}")
     print(f"Number of nodes: {graph.number_of_nodes()}")
     print(f"Number of edges: {graph.number_of_edges()}")
+    # print average degree
+    avg_degree = np.mean([d for n, d in graph.degree()])
+    print(f"Average degree: {avg_degree}")
+    # avg_shortest_path = nx.average_shortest_path_length(graph)
+    # print(f"Average shortest path length: {avg_shortest_path}")
     subgraph = sample_k_hop_subgraph(graph, num_hops)
     nx.draw(subgraph, pos=nx.get_node_attributes(subgraph, "pos"), node_size=10)
     plt.show()
