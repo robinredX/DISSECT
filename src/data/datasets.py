@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 from torch_geometric.loader import DataLoader
 import torch
+import torch.nn.functional as F
 import numpy as np
 import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data
@@ -67,6 +68,8 @@ class SpatialDISSECTDataset(Dataset):
         self.num_sims = self.X_sim.shape[0]
         self.y_sim = torch.Tensor(y_sim)
 
+        self.graph_ids = F.one_hot(torch.arange(3)).float()
+
         self.real_graph = self.construct_real_graph(st_data, X_real, y_real)
         if not self.test:
             self.sim_base_graph = self.construct_sim_base_graph()
@@ -79,6 +82,7 @@ class SpatialDISSECTDataset(Dataset):
         real_graph = pyg_utils.from_networkx(real_graph)
         if y_real is not None:
             real_graph.y = torch.Tensor(y_real)
+        real_graph.id = self.graph_ids[[0]].expand(real_graph.num_nodes, -1)
         return real_graph
 
     def __len__(self):
@@ -106,7 +110,17 @@ class SpatialDISSECTDataset(Dataset):
         loop_index = torch.arange(0, num_nodes, dtype=torch.long)
         loop_index = loop_index.unsqueeze(0).repeat(2, 1)
         sim_edge_index = torch.cat([sim_edge_index, loop_index], dim=1)
-        sim_base_graph = Data(x=None, edge_index=sim_edge_index, pos=fake_pos, y=None)
+        sim_edge_attr = torch.zeros((sim_edge_index.shape[1], 1))
+        sim_edge_weight = torch.zeros((sim_edge_index.shape[1],))
+        sim_base_graph = Data(
+            x=None,
+            edge_index=sim_edge_index,
+            edge_weight=sim_edge_weight,
+            edge_attr=sim_edge_attr,
+            pos=fake_pos,
+            y=None,
+        )
+        sim_base_graph.id = self.graph_ids[[1]].expand(num_nodes, -1)
         return sim_base_graph
 
     def construct_new_sim_graph(self):
@@ -117,6 +131,13 @@ class SpatialDISSECTDataset(Dataset):
         self.sim_base_graph.x = x_sim
         self.sim_base_graph.y = y_sim_slice
         return self.sim_base_graph
+
+    def move_to_device(self, device):
+        self.real_graph = self.real_graph.to(device)
+        if not self.test:
+            self.sim_base_graph = self.sim_base_graph.to(device)
+        self.X_sim = self.X_sim.to(device)
+        self.y_sim = self.y_sim.to(device)
 
 
 def prepare_dataset(
