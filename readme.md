@@ -9,7 +9,7 @@ Install packages listed in `requirements.txt` through `pip install -r requiremen
 # Step 1. Simulation 
 If simulation is not needed, set `simulated` in `configs/main_config.py` to True, and go to step 2.
 
-If simulation is not needed, go to `PropsSimulator` and follow the instructions for simulation in `readme.md`.
+If simulation is needed, go to `PropsSimulator` and follow the instructions for simulation in `readme.md`.
 
 # Step 2. Deconvolution
 
