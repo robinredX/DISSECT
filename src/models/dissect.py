@@ -6,7 +6,12 @@ from torch_geometric.nn.inits import glorot, zeros
 
 class Dissect(nn.Module):
     def __init__(
-        self, num_genes, num_celltypes, channel_list=[512, 256, 128, 64], act="relu6", use_pos=False
+        self,
+        num_genes,
+        num_celltypes,
+        channel_list=[512, 256, 128, 64],
+        act="relu6",
+        use_pos=False,
     ) -> None:
         super().__init__()
         if not use_pos:

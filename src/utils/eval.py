@@ -1,6 +1,7 @@
 import pandas as pd
 from src.utils.metrics import calc_metrics_df
 
+
 def create_metrics_df(
     mean_corrs, mean_corrs_sample, mean_rmses, mean_rmses_sample, method="DISSECT"
 ):
@@ -18,17 +19,20 @@ def create_metrics_df(
         }
     )
 
+
 def compare_methods(dissect_results, gnn_results: dict, y_real, verbose=0):
     gnn_metrics = {}
     for key, gnn_result in gnn_results.items():
-        gnn_metrics[key]= calc_metrics_df(gnn_result, y_real, verbose=verbose, exclude_cols=None)
+        gnn_metrics[key] = calc_metrics_df(
+            gnn_result, y_real, verbose=verbose, exclude_cols=None
+        )
 
     dissect_metrics = {}
     for k, result in enumerate(dissect_results):
         dissect_metrics[f"DISSECT-{k}"] = calc_metrics_df(
             result, y_real, verbose=verbose, exclude_cols=None
         )
-    
+
     # put all results into one dataframe
     dissect_results_dfs = []
     for key, dissect_metric in dissect_metrics.items():
@@ -53,5 +57,7 @@ def compare_methods(dissect_results, gnn_results: dict, y_real, verbose=0):
                 method=key,
             )
         )
-    comparison_df = pd.concat([*dissect_results_dfs, *gnn_results_dfs], axis=0, ignore_index=True)
+    comparison_df = pd.concat(
+        [*dissect_results_dfs, *gnn_results_dfs], axis=0, ignore_index=True
+    )
     return comparison_df

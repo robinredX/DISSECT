@@ -39,7 +39,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.l1_lambda = l1_lambda
         self.l2_lambda = l2_lambda
         self.sim_loss_fn = sim_loss_fn
-        
+
         # only used for plotting during validation
         if spatial_data is not None:
             self.st_data = spatial_data.copy()
@@ -51,7 +51,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
         self.normalize = normalize
-        
+
         # this accesses the init parameters of the model
         self.save_hyperparameters(
             ignore=["net", "spatial_data", "sample_names", "celltype_names"]
@@ -96,7 +96,7 @@ class DeconvolutionModel(pl.LightningModule):
         # create mixture graph on the fly
         # maybe increase amount of real data over time per node
         alpha = alpha_scheduler(self.global_step, self.alpha_min, self.alpha_max)
-        
+
         # TODO refine mixture graph definition
         g_mix = Data(
             x=alpha * g_real.x + (1 - alpha) * g_sim.x,
@@ -122,7 +122,6 @@ class DeconvolutionModel(pl.LightningModule):
         y_hat_real = self(g_real)
         y_hat_sim = self(g_sim)
         y_hat_mix = self(g_mix)
-
 
         sim_loss, mix_loss = calc_loss(
             y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn

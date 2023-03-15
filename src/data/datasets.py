@@ -5,7 +5,11 @@ import numpy as np
 import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data
 
-from src.data.graph_utils import construct_spatial_graph, construct_networkx_graph, normalize_coords
+from src.data.graph_utils import (
+    construct_spatial_graph,
+    construct_networkx_graph,
+    normalize_coords,
+)
 
 
 def get_spatial_train_and_test_set(
