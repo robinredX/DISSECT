@@ -49,6 +49,10 @@ class SpatialDataModule(LightningDataModule):
     def num_spots(self) -> int:
         return self.X_real.shape[0]
 
+    @property
+    def num_genes(self) -> int:
+        return self.X_real.shape[1]
+
     def prepare_data(self) -> None:
         # potentially run data dissect data preparation here
         # should not be used to set variables like self.train_data
