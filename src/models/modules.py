@@ -6,6 +6,7 @@ import PIL
 import matplotlib.pyplot as plt
 import numpy as np
 import squidpy as sq
+import scanpy as sc
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -28,6 +29,9 @@ class DeconvolutionModel(pl.LightningModule):
         sample_names=None,
         spatial_data=None,
         sim_loss_fn="kl_div",
+        alpha_min=0.1,
+        alpha_max=0.9,
+        normalize=True,
     ):
         super().__init__()
         self.net = net
@@ -35,10 +39,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.l1_lambda = l1_lambda
         self.l2_lambda = l2_lambda
         self.sim_loss_fn = sim_loss_fn
-        # this accesses the init parameters of the model
-        self.save_hyperparameters(
-            ignore=["net", "spatial_data", "sample_names", "celltype_names"]
-        )
+        
         # only used for plotting during validation
         if spatial_data is not None:
             self.st_data = spatial_data.copy()
@@ -47,6 +48,14 @@ class DeconvolutionModel(pl.LightningModule):
         self.celltype_names = celltype_names
         self.sample_names = sample_names
         self.beta = beta
+        self.alpha_min = alpha_min
+        self.alpha_max = alpha_max
+        self.normalize = normalize
+        
+        # this accesses the init parameters of the model
+        self.save_hyperparameters(
+            ignore=["net", "spatial_data", "sample_names", "celltype_names"]
+        )
 
     def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
         # https://pytorch-lightning.readthedocs.io/en/stable/guides/speed.html
@@ -63,7 +72,9 @@ class DeconvolutionModel(pl.LightningModule):
         return [optimizer]  # , [scheduler]
 
     def forward(self, graph):
-        graph.x = normalize_per_sample(graph.x, with_pos=False)
+        # maybe make this normalization optional and instead do it in the dataset
+        if self.normalize:
+            graph.x = normalize_per_sample(graph.x, with_pos=False)
         y_hat = self.net(
             graph.x,
             graph.edge_index,
@@ -84,7 +95,9 @@ class DeconvolutionModel(pl.LightningModule):
 
         # create mixture graph on the fly
         # maybe increase amount of real data over time per node
-        alpha = alpha_scheduler(self.global_step)
+        alpha = alpha_scheduler(self.global_step, self.alpha_min, self.alpha_max)
+        
+        # TODO refine mixture graph definition
         g_mix = Data(
             x=alpha * g_real.x + (1 - alpha) * g_sim.x,
             edge_index=g_real.edge_index,
@@ -97,21 +110,25 @@ class DeconvolutionModel(pl.LightningModule):
         # simulated ground truth celltype abundances
         y_sim = g_sim.y
 
+        # change loss function based on global step
+        # should be done in a callback
+        if self.beta is None:
+            beta = beta_scheduler(self.global_step)
+        else:
+            beta = self.beta
+
         # forward pass
+        # TODO check whether we can put everything into one batch
         y_hat_real = self(g_real)
         y_hat_sim = self(g_sim)
         y_hat_mix = self(g_mix)
 
-        # change loss function based on global step
-        # should be done in a callback
-        if self.beta is None:
-            self.beta = beta_scheduler(self.global_step)
 
         sim_loss, mix_loss = calc_loss(
             y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn
         )
 
-        total_loss = sim_loss + self.beta * mix_loss
+        total_loss = sim_loss + beta * mix_loss
         # optionally add l1 and l2 regularization
         l1_loss = ln_loss(self.net, n=1, ln_lambda=self.l1_lambda, only_matrices=True)
         self.log("train/l1_loss", l1_loss)
@@ -125,6 +142,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.log("train/total_loss", total_loss)
         self.log("train/sim_loss", sim_loss)
         self.log("train/mix_loss", mix_loss)
+        self.log("train/beta", beta)
 
         return total_loss
 
@@ -140,7 +158,7 @@ class DeconvolutionModel(pl.LightningModule):
             # add new column to adata
             self.st_data.obs["celltype"] = pred_celltypes
             fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-            sq.pl.spatial_scatter(self.st_data, color=["celltype"], ax=ax)
+            sc.pl.spatial(self.st_data, color=["celltype"], ax=ax, show=False)
             pil_img = buffer_plot_and_get(fig)
             plt.close(fig)
             self.logger.log_image(
