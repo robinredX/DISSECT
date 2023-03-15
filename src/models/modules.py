@@ -10,7 +10,7 @@ import scanpy as sc
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Batch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 
@@ -32,6 +32,7 @@ class DeconvolutionModel(pl.LightningModule):
         alpha_min=0.1,
         alpha_max=0.9,
         normalize=True,
+        move_data_to_device=False,
     ):
         super().__init__()
         self.net = net
@@ -51,6 +52,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
         self.normalize = normalize
+        self.move_data_to_device = move_data_to_device
 
         # this accesses the init parameters of the model
         self.save_hyperparameters(
@@ -85,6 +87,14 @@ class DeconvolutionModel(pl.LightningModule):
         )
         return y_hat
 
+    def on_fit_start(self) -> None:
+        # potentially move real and sim graph onto gpu
+        if self.move_data_to_device:
+            self.trainer.datamodule.train_data.move_to_device(self.device)
+            self.trainer.datamodule.val_data.move_to_device(self.device)
+        else:
+            pass
+
     # by default runs the forward method
     def predict_step(self, batch, idx):
         # select real graph
@@ -105,6 +115,7 @@ class DeconvolutionModel(pl.LightningModule):
             edge_attr=g_real.edge_attr,
             pos=g_real.pos,
             batch=g_real.batch,
+            id=torch.roll(g_sim.id, 1, 1)
         )
 
         # simulated ground truth celltype abundances
@@ -113,12 +124,15 @@ class DeconvolutionModel(pl.LightningModule):
         # change loss function based on global step
         # should be done in a callback
         if self.beta is None:
-            beta = beta_scheduler(self.global_step)
+            beta = beta_scheduler(self.global_step, max_steps=self.trainer.max_steps)
         else:
             beta = self.beta
 
         # forward pass
         # TODO check whether we can put everything into one batch
+        # data_list = g_real.to_data_list() + g_sim.to_data_list() + [g_mix]
+        # data_batch = Batch.from_data_list(data_list)
+
         y_hat_real = self(g_real)
         y_hat_sim = self(g_sim)
         y_hat_mix = self(g_mix)
