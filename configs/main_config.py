@@ -5,9 +5,10 @@ config = {
     "test_dataset_format": "txt", # Either tab-delimited txt file with genes in rows or h5ad file compatible with Scanpy.
     "test_dataset_type": "bulk", # bulk, microarray or spatial
     "duplicated": "first", # In case, there are duplicated genes in the test_dataset. To use the first occuring gene, write first. To sum the duplicated genes, write sum. To take average, write mean
-    "normalize_simulated": None, #"cpm", # Only CPM and None is supported. Write CPM if not already TPM/CPM.
+    "normalize_simulated": "cpm", #"cpm", # Only CPM and None is supported. Write CPM if not already TPM/CPM.
     "normalize_test": None, # Write CPM if not already TPM/CPM
-    "var_cutoff": 0.1, # variance cutoff for gene filtering
+    "var_cutoff": 0, # variance cutoff for gene filtering
+    "test_in_mix": 1,
     "simulated": True, # True if dataset is already simulated. False, if it is a single-cell dataset.
     "sig_matrix": False,
     "mix": "srm",
