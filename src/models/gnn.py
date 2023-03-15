@@ -158,7 +158,7 @@ class BiChannelGNNBlock(nn.Module):
         assert num_channels > 0, "No channels selected"
 
         self.fusion = fusion
-        if fusion == "concat":
+        if "concat" in fusion:
             self.concat_linear = nn.LazyLinear(latent_dim)
         elif fusion == "gating":
             self.gating_unit = GatingUnit(num_inputs=num_channels)
@@ -205,11 +205,16 @@ class BiChannelGNNBlock(nn.Module):
         if self.fusion == "gating":
             out_fusion = self.gating_unit(x, *channels)
         elif self.fusion == "concat":
-            # concat fusion
-            # concat gnn channels, perform linear transformation, and add initial input
+            channels.append(x)
+            out_concat = torch.cat(channels, dim=-1)
+            out_fusion = self.concat_linear(out_concat)
+        elif self.fusion == "concat_skip":
             out_concat = torch.cat(channels, dim=-1)
             out_fusion = self.concat_linear(out_concat)
             out_fusion = out_fusion + x
+        elif self.fusion == "concat_simple":
+            out_concat = torch.cat(channels, dim=-1)
+            out_fusion = self.concat_linear(out_concat)
         else:
             out_fusion = channels[0]
 
