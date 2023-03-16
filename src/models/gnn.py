@@ -12,6 +12,11 @@ from torch_geometric.nn.resolver import (
 from torch.nn import MultiheadAttention
 from torch_geometric.nn import knn_graph
 
+from src.models.components.fusion import GatingUnit
+from src.models.decoder import CelltypeDecoder
+from src.models.components.ffn import FeedForwardBlock
+from src.models.transformer import TransformerEncoder
+
 
 class DissectSpatial(nn.Module):
     def __init__(
@@ -20,24 +25,52 @@ class DissectSpatial(nn.Module):
         latent_dim,
         activation="relu",
         use_pos=True,
+        encoder_type="gnn",
+        use_id=False,
         encoder_kwargs={},
         decoder_kwargs={},
     ) -> None:
         super().__init__()
-        self.encoder = BiChannelGNNEncoder(
-            latent_dim, activation=activation, **encoder_kwargs
-        )
+        if encoder_type == "transformer":
+            self.encoder = TransformerEncoder(
+                latent_dim, activation=activation, **encoder_kwargs
+            )
+        elif encoder_type == "gnn":
+            self.encoder = BiChannelGNNEncoder(
+                latent_dim, activation=activation, **encoder_kwargs
+            )
+        else:
+            raise ValueError(
+                f"encoder_type {encoder_type} not supported, choose from ['transformer', 'gnn']"
+            )
         self.decoder = CelltypeDecoder(
             latent_dim, num_celltypes, activation=activation, **decoder_kwargs
         )
         self.use_pos = use_pos
+        self.use_id = use_id
 
     def forward(
-        self, x, edge_index, edge_weight=None, edge_attr=None, pos=None, batch=None
+        self,
+        x,
+        edge_index,
+        edge_weight=None,
+        edge_attr=None,
+        pos=None,
+        batch=None,
+        id=None,
     ):
         if pos is not None and self.use_pos:
             x = torch.cat([x, pos], dim=-1)
-        z = self.encoder(x, edge_index, edge_weight, edge_attr, pos, batch)
+        if id is not None and self.use_id:
+            x = torch.cat([x, id], dim=-1)
+        z = self.encoder(
+            x,
+            edge_index=edge_index,
+            edge_weight=edge_weight,
+            edge_attr=edge_attr,
+            pos=pos,
+            batch=batch,
+        )
         out = self.decoder(z)
         return out
 
@@ -140,7 +173,7 @@ class BiChannelGNNBlock(nn.Module):
                 num_heads,
                 edge_dim=1,
                 add_self_loops=False,
-                **spatial_conv_kwargs
+                **spatial_conv_kwargs,
             )
 
         # extra conv with just self loops for simulated data
@@ -243,70 +276,3 @@ class BiChannelGNNBlock(nn.Module):
             cosine=self.cosine,
         )
         return edge_index
-
-
-class GatingUnit(nn.Module):
-    def __init__(self, num_channels) -> None:
-        super().__init__()
-        self.num_channels = num_channels
-        self.linear = nn.LazyLinear(num_channels + 1)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x, *channels):
-        # compute weights based on previouse latent representation
-        logits = self.linear(x)
-        weights = self.softmax(logits)
-        # compute weighted sum
-        out = weights[:, [0]] * x
-        for i in range(1, self.num_channels + 1):
-            out += weights[:, [i]] * channels[i]
-        return out
-
-
-class FeedForwardBlock(nn.Module):
-    def __init__(self, d_model, hidden_dim, dropout=0.0, activation="relu") -> None:
-        super().__init__()
-        self.linear1 = Linear(d_model, hidden_dim)
-        self.linear2 = Linear(hidden_dim, d_model)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.activation = activation_resolver(activation)
-
-    def forward(self, x: Tensor):
-        x = self.linear1(x)
-        x = self.activation(x)
-        x = self.dropout1(x)
-        x = self.linear2(x)
-        return self.dropout2(x)
-
-
-class CelltypeDecoder(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        num_celltypes,
-        num_layers=2,
-        hidden_channels=64,
-        activation="relu",
-        norm=None,
-        **kwargs
-    ) -> None:
-        super().__init__()
-        self.num_celltypes = num_celltypes
-        self.mlp = MLP(
-            in_channels=in_channels,
-            hidden_channels=hidden_channels,
-            out_channels=num_celltypes,
-            num_layers=num_layers,
-            norm=norm,
-            plain_last=True,
-            act=activation,
-            **kwargs
-        )
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        x = self.mlp(x)
-        x = self.softmax(x)
-
-        return x
