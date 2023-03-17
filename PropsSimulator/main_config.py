@@ -9,6 +9,7 @@ config = {
     "cells_per_sample": None,  # Number of cells to sample to generate one sample.
     # Default 500
     "downsample": None,  # If simulation_type is ST, a float is used to downsample counts
+    "preprocess": None,
     "filter": {  # Filtering of sc/snRNA-seq before simulating
         "min_genes": 200,
         "min_cells": 3,
