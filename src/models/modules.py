@@ -84,6 +84,7 @@ class DeconvolutionModel(pl.LightningModule):
             graph.edge_attr,
             pos=graph.pos,
             batch=graph.batch,
+            id=graph.id,
         )
         return y_hat
 
@@ -115,7 +116,7 @@ class DeconvolutionModel(pl.LightningModule):
             edge_attr=g_real.edge_attr,
             pos=g_real.pos,
             batch=g_real.batch,
-            id=torch.roll(g_sim.id, 1, 1)
+            id=torch.roll(g_sim.id, 1, 1),
         )
 
         # simulated ground truth celltype abundances
