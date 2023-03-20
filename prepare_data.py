@@ -22,11 +22,14 @@ def dataset(config):
     elif os.path.exists(savedir) and not os.path.exists(dataset_path):
         os.mkdir(dataset_path)
     else:
-        sys.exit(
-            "Path {} already exists. Please choose a folder in which datasets folder doesn't exist.".format(
-                savedir
-            )
-        )
+        from datetime import datetime
+        now = datetime.now()
+        date_time = now.strftime("%m.%d.%Y_%H.%M.%S")
+        name = "experiment_" + date_time
+        print("Specified experiment_folder {} already exists. Creating a new folder with name {}.".format(config["experiment_folder"], name))
+        config["experiment_folder"] = name
+        os.mkdir(config["experiment_folder"])
+        # sys.exit("Path {} already exists. Please choose a folder in which datasets folder doesn't exist.".format(savedir))
     if config["save_config"]:
         with open(
             os.path.join(config["experiment_folder"], "main_config.py"), "w"

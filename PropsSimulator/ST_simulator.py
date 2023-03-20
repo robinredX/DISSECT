@@ -283,7 +283,8 @@ random.seed(s)
 np.random.seed(s)
 
 sim = Simulate(config)
-sim.preprocess()
+if config["preprocess"]:
+    sim.preprocess()
 sim.generate_props()
 batch_col = sim.config["batch_col"]
 columns = sim.sc_adata.obs.columns

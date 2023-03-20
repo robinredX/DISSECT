@@ -14,7 +14,7 @@ def ensemble(config):
         )
 
     i = 0
-    for i in range(len(config["seeds"])):
+    for i in range(len(config["models"])):
         df_curr = pd.read_table(
             os.path.join(
                 config["experiment_folder"], "dissect_fractions_{}.txt".format(i)
