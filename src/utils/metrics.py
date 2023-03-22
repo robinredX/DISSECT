@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 def calc_mean_corr(x, y, transpose=True):
@@ -17,14 +18,16 @@ def calc_mean_corr_df(df_1, df_2, transpose=True, verbose=2, exclude_cols=None):
     df_1 = df_1[df_2.columns]
     mean_corr, corrs = calc_mean_corr(df_1.values, df_2.values, transpose=transpose)
     if transpose:
-        term = ""
+        suffix = ""
     else:
-        term = " (samplewise)"
+        suffix = " (samplewise)"
+    
     if verbose > 1:
         for k, col in enumerate(df_1.columns):
-            print(f"Correlation {col}{term}: {corrs[k]}")
+            print(f"Correlation {col}{suffix}: {corrs[k]}")
     if verbose > 0:
-        print(f"Mean Correlation{term}: {mean_corr}")
+        print(f"Mean Correlation{suffix}: {mean_corr}")
+    
     return mean_corr, corrs
 
 
@@ -63,28 +66,19 @@ def calc_mean_rmse_df(df_1, df_2, verbose=2, exclude_cols=None, samplewise=False
     return mean_rmse, rmses
 
 
-def calc_metrics_df(df_1, df_2, verbose=1, exclude_cols=None):
+def calc_metrics_df(df_1, df_2, verbose=1, exclude_cols=None, samplewise=False):
     mean_corr, corrs = calc_mean_corr_df(
-        df_1, df_2, verbose=verbose, exclude_cols=exclude_cols
-    )
-    mean_corr_sample, corrs_sample = calc_mean_corr_df(
-        df_1, df_2, transpose=False, verbose=verbose, exclude_cols=exclude_cols
+        df_1, df_2, verbose=verbose, exclude_cols=exclude_cols, transpose=not samplewise
     )
 
     mean_rmse, rmses = calc_mean_rmse_df(
-        df_1, df_2, verbose=verbose, exclude_cols=exclude_cols
+        df_1, df_2, verbose=verbose, exclude_cols=exclude_cols, samplewise=samplewise
     )
-    mean_rmse_sample, rmses_sample = calc_mean_rmse_df(
-        df_1, df_2, samplewise=True, verbose=verbose, exclude_cols=exclude_cols
+    metrics_names = ["correlation", "RMSE"]
+    if samplewise:
+        metrics_names = [f"{name} (samplewise)" for name in metrics_names]
+    metrics = [corrs, rmses]
+    metrics_df = pd.DataFrame(
+        {name: metric for name, metric in zip(metrics_names, metrics)}
     )
-    metrics = {
-        "mean_corr": mean_corr,
-        "corrs": corrs,
-        "mean_corr_sample": mean_corr_sample,
-        "corrs_sample": corrs_sample,
-        "mean_rmse": mean_rmse,
-        "rmses": rmses,
-        "mean_rmse_sample": mean_rmse_sample,
-        "rmses_sample": rmses_sample,
-    }
-    return metrics
+    return metrics_df
