@@ -1,7 +1,8 @@
 config = {
-    "experiment_folder": "simulation",  # Path to save outputs. Default: expriment
-    "scdata": "/data/single_cells/sc_example.h5ad",  # Path to sc/snRNA-seq data, should be anndata
-    "n_samples": None,  # Number of samples to generate.
+    "experiment_folder": "experiment",  # Path to save outputs. Default: expriment
+    "scdata": "gep.txt",  # Path to sc/snRNA-seq data, should be anndata
+    "scdata_type": "txt",  # Data format. txt or h5ad. If txt: index: Cell type and columns: Genes
+    "n_samples": 10000,  # Number of samples to generate.
     # Default: 1000 times the number of celltypes,
     "type": "bulk",  # Bulk or ST
     "celltype_col": "celltype",  # Name of the column corresponding to cell-type labels in adata.obs
@@ -9,6 +10,7 @@ config = {
     "cells_per_sample": None,  # Number of cells to sample to generate one sample.
     # Default 500
     "downsample": None,  # If simulation_type is ST, a float is used to downsample counts
+    "preprocess": False,
     "filter": {  # Filtering of sc/snRNA-seq before simulating
         "min_genes": 200,
         "min_cells": 3,
@@ -23,5 +25,5 @@ config = {
     "prop_sparse": 0.5,  # Proportion of sparse samples to generate. Default: 0.5
     # Sparse samples are samples in which some cell-types do not exist.
     # Probabilities of cell-types to not be present in the generate sample are uniform.
-    "generate_component_figures": True,  # Computes PCA of celltype signatures per generated sample
+    "generate_component_figures": False,  # Computes PCA of celltype signatures per generated sample
 }

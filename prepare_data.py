@@ -137,11 +137,11 @@ def dataset(config):
     genes_intersect = list(set(genes_real) & set(genes_sim))
     print("There are {} common genes between simulated and test dataset.".format(len(genes_intersect)))
     X_sim, X_real = X_sim.loc[:, genes_intersect], X_real.loc[:, genes_intersect]
-
-    
-    if config["test_in_mix"]:
-        X_real = X_real.iloc[0:config["test_in_mix"],:]
     X_real_test = X_real.copy()
+
+    if config["test_in_mix"]>0:
+        X_real = X_real.iloc[0:config["test_in_mix"],:]
+
     real_size = X_real.shape[0]
     sim_size  = X_sim.shape[0]
 

@@ -85,11 +85,15 @@ def run_dissect(config):
                     loss_ = reg_loss
                 elif step in range(2000,4000):
                     lambda_ = 15
+                    if config["test_in_mix"]==0:
+                        lambda_ = 0
                     if config["sig_matrix"] or config["test_dataset_type"]=="spatial_sparse":
                         lambda_ = 0.15
                     loss_ = reg_loss + lambda_*cons_loss
                 elif step >= 4000:
                     lambda_ = 10
+                    if config["test_in_mix"]==0:
+                        lambda_ = 0
                     if config["sig_matrix"] or config["test_dataset_type"]=="spatial_sparse":
                         lambda_ = 0.10
                     loss_ = reg_loss + lambda_*cons_loss

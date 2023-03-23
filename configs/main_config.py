@@ -1,11 +1,11 @@
 config = {
-    "experiment_folder": "experiment_1", 
-    "test_dataset": "../../DISSECT/demo/GSE120502.txt",
-    "reference": "data.h5ad",
+    "experiment_folder": "experiment",
+    "test_dataset": "",
+    "reference": "PropsSimulator/experiment/simulated.h5ad",
     "test_dataset_format": "txt", # Either tab-delimited txt file with genes in rows or h5ad file compatible with Scanpy.
     "test_dataset_type": "bulk", # bulk, microarray or spatial
     "duplicated": "first", # In case, there are duplicated genes in the test_dataset. To use the first occuring gene, write first. To sum the duplicated genes, write sum. To take average, write mean
-    "normalize_simulated": "cpm", #"cpm", # Only CPM and None is supported. Write CPM if not already TPM/CPM.
+    "normalize_simulated": None, #"cpm", # Only CPM and None is supported. Write CPM if not already TPM/CPM.
     "normalize_test": None, # Write CPM if not already TPM/CPM
     "var_cutoff": 0, # variance cutoff for gene filtering
     "test_in_mix": 1,
@@ -18,7 +18,7 @@ config = {
                         "hidden_activation": "relu6", # Activation of hidden layers. Choose ones supported in keras or relu6.
                         "output_activation": "softmax", # Activation of output layer. 
                         "loss": "kldivergence", # Options - kldivergence, l2, l1. KL divergence will only work properly if output activation is softmax.
-                        "n_steps": 5000, # Number of training steps
+                        "n_steps": 10000, # Number of training steps
                         "lr": 1e-5, # Learning rate
                         "batch_size": 64, # best - 64 # batch size
                         "dropout": None # If you would like dropoouts in the model, write a list with same number of elements as n_hidden_layers above corresponding to each dropout layer. 
