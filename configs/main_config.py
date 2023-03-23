@@ -18,7 +18,7 @@ config = {
                         "hidden_activation": "relu6", # Activation of hidden layers. Choose ones supported in keras or relu6.
                         "output_activation": "softmax", # Activation of output layer. 
                         "loss": "kldivergence", # Options - kldivergence, l2, l1. KL divergence will only work properly if output activation is softmax.
-                        "n_steps": 10000, # Number of training steps
+                        "n_steps": 5000, # Number of training steps
                         "lr": 1e-5, # Learning rate
                         "batch_size": 64, # best - 64 # batch size
                         "dropout": None # If you would like dropoouts in the model, write a list with same number of elements as n_hidden_layers above corresponding to each dropout layer. 
