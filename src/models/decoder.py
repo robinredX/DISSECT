@@ -32,3 +32,30 @@ class CelltypeDecoder(nn.Module):
         x = self.softmax(x)
 
         return x
+
+
+class GeneExpressionDecoder(nn.Module):
+    def __init__(
+        self,
+        latent_dim,
+        num_genes,
+        activation="relu",
+        norm=None,
+        dropout=0.0,
+        hidden_channels=[256, 512],
+        **kwargs
+    ) -> None:
+        super().__init__()
+        self.num_genes = num_genes
+        self.mlp = MLP(
+            channel_list=[latent_dim, *hidden_channels, num_genes],
+            norm=norm,
+            plain_last=True,
+            act=activation,
+            dropout=dropout,
+            **kwargs
+        )
+
+    def forward(self, x):
+        x = self.mlp(x)
+        return x
