@@ -1,0 +1,7 @@
+_target_: src.data.datamodules.SpatialDataModule
+st_path: ${paths.data_dir}/spatial/simulations_heart_seqFISH/embryo1_resolution0.11.h5ad
+reference_dir: ${paths.root_dir}/experiments/experiment_heart_seqFISH_embryo1_resolution0.11-new
+radius: 0.0001
+p: 0.0
+pin_memory: False
+log_hparams: False

@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+  
+_target_: src.models.modules.DeconvolutionModel
+weight_decay: 0.0
+l1_lambda: 0.0
+l2_lambda: 0.0
+learning_rate: 1.0e-5
+sim_loss_fn: "kl_div"
+beta: null
+alpha_max: 0.9
+alpha_min: 0.1
+move_data_to_device: True
+save_predictions: False
+plotting: False
+log_hparams: False

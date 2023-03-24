@@ -1,0 +1,17 @@
+_target_: src.models.dissect_spatial.DissectSpatial
+latent_dim: 128
+activation: relu6
+use_pos: true
+use_id: False
+encoder_type: "gnn"
+encoder_kwargs: 
+  norm: null
+  spatial_channel: True
+  lin_channel: False
+  latent_channel: False
+  fusion: ""
+  use_ffn: False
+  num_layers: 1
+decoder_kwargs:
+  num_layers: 2
+  hidden_channels: 64
