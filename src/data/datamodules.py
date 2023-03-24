@@ -7,7 +7,12 @@ from torch_geometric.loader import DataLoader
 import scanpy as sc
 
 from src.data.datasets import get_spatial_train_and_test_set
-from src.data.utils import load_prepared_data, load_spatial_data
+from src.data.utils import (
+    load_prepared_data,
+    load_spatial_data,
+    load_celltypes,
+    load_sample_names,
+)
 
 
 class SpatialDataModule(LightningDataModule):
@@ -22,21 +27,29 @@ class SpatialDataModule(LightningDataModule):
         val_batch_size: int = 1,
         num_workers: int = 0,
         pin_memory: bool = True,
+        log_hparams: bool = True,
     ) -> None:
         super().__init__()
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
-        self.save_hyperparameters()
+        self.save_hyperparameters(logger=log_hparams)
 
         self.st_data = load_spatial_data(self.hparams.st_path)
         self.X_real, self.X_real_train, self.X_sim, self.y_sim = load_prepared_data(
             self.hparams.reference_dir
         )
         # ground truth only available for slideseq data
-        if "slide" in self.hparams.st_path:
+        if "slide" in self.hparams.st_path or "FISH" in self.hparams.st_path:
             self.y_real = self.st_data.obs[self.st_data.obs.columns[2::]].to_numpy()
         else:
             self.y_real = None
+
+        self.celltype_names = load_celltypes(f"{reference_dir}/datasets/celltypes.txt")
+
+        # load sample names
+        self.sample_names = load_sample_names(
+            f"{reference_dir}/datasets/sample_names.txt"
+        )
 
         self.train_data: Optional[Dataset] = None
         self.val_data: Optional[Dataset] = None
@@ -117,3 +130,7 @@ class SpatialDataModule(LightningDataModule):
         print(f"Elements in val batch: {len(val_batch)}")
         print("Val batch element 0:", val_batch[0])
         return train_batch, val_batch
+
+    def move_to_device(self, device):
+        self.train_data.move_to_device(device)
+        self.val_data.move_to_device(device)
