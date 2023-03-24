@@ -25,10 +25,11 @@ class TransformerEncoder(nn.Module):
         dropout=0.0,
         norm="batch_norm",
         bias=True,
+        init_embed_hidden_channels=[512, 256],
     ) -> None:
         super().__init__()
         self.mlp = MLP(
-            [-1, 512, 256, latent_dim],
+            [-1, *init_embed_hidden_channels, latent_dim],
             norm=None,
             plain_last=True,
             act=activation,
