@@ -14,7 +14,7 @@ from torch_geometric.data import Data, Batch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 
-from src.utils.metrics import calc_mean_corr, calc_mean_rmse
+from src.utils.metrics import calc_mean_corr, calc_mean_rmse, calc_ccc
 
 
 class DeconvolutionModel(pl.LightningModule):
@@ -24,40 +24,40 @@ class DeconvolutionModel(pl.LightningModule):
         weight_decay=0.0,
         l1_lambda=1e-5,
         l2_lambda=1e-5,
+        learning_rate=1e-5,
         beta=None,
-        celltype_names=None,
-        sample_names=None,
-        spatial_data=None,
         sim_loss_fn="kl_div",
         alpha_min=0.1,
         alpha_max=0.9,
         normalize=True,
         move_data_to_device=False,
+        plotting=True,
+        save_predictions=True,
+        log_hparams=True,
     ):
         super().__init__()
+        
         self.net = net
         self.weight_decay = weight_decay
         self.l1_lambda = l1_lambda
         self.l2_lambda = l2_lambda
+        self.learning_rate = learning_rate
         self.sim_loss_fn = sim_loss_fn
-
-        # only used for plotting during validation
-        if spatial_data is not None:
-            self.st_data = spatial_data.copy()
-        else:
-            self.st_data = None
-        self.celltype_names = celltype_names
-        self.sample_names = sample_names
+        if beta == "None":
+            beta = None
         self.beta = beta
+        if alpha_max < alpha_min:
+            alpha_min = alpha_max
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
         self.normalize = normalize
         self.move_data_to_device = move_data_to_device
+        self.exchange_weights = False
+        self.plotting = plotting
+        self.save_predictions = save_predictions
 
         # this accesses the init parameters of the model
-        self.save_hyperparameters(
-            ignore=["net", "spatial_data", "sample_names", "celltype_names"]
-        )
+        self.save_hyperparameters(ignore=["net"], logger=log_hparams)
 
     def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
         # https://pytorch-lightning.readthedocs.io/en/stable/guides/speed.html
@@ -66,7 +66,7 @@ class DeconvolutionModel(pl.LightningModule):
     def configure_optimizers(self):
         # configure optimizer
         optimizer = torch.optim.Adam(
-            self.net.parameters(), lr=1e-5, weight_decay=self.weight_decay
+            self.net.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
         )
         # TODO
         # configure lr scheduler
@@ -74,14 +74,13 @@ class DeconvolutionModel(pl.LightningModule):
         return [optimizer]  # , [scheduler]
 
     def forward(self, graph):
-        # maybe make this normalization optional and instead do it in the dataset
         if self.normalize:
             graph.x = normalize_per_sample(graph.x, with_pos=False)
         y_hat = self.net(
-            graph.x,
-            graph.edge_index,
-            graph.edge_weight,
-            graph.edge_attr,
+            x=graph.x,
+            edge_index=graph.edge_index,
+            edge_weight=graph.edge_weight,
+            edge_attr=graph.edge_attr,
             pos=graph.pos,
             batch=graph.batch,
             id=graph.id,
@@ -90,11 +89,17 @@ class DeconvolutionModel(pl.LightningModule):
 
     def on_fit_start(self) -> None:
         # potentially move real and sim graph onto gpu
+        self.datamodule = self.trainer.datamodule
+        self.celltype_names = self.datamodule.celltype_names
+        self.sample_names = self.datamodule.sample_names
+        self.st_data = self.datamodule.st_data
         if self.move_data_to_device:
-            self.trainer.datamodule.train_data.move_to_device(self.device)
-            self.trainer.datamodule.val_data.move_to_device(self.device)
+            self.datamodule.move_to_device(self.device)
         else:
             pass
+        wandb.define_metric("validation/mean_corr", summary="max")
+        wandb.define_metric("validation/mean_rmse", summary="min")
+        wandb.define_metric("validation/mean_ccc", summary="max")
 
     # by default runs the forward method
     def predict_step(self, batch, idx):
@@ -129,33 +134,36 @@ class DeconvolutionModel(pl.LightningModule):
         else:
             beta = self.beta
 
-        # forward pass
-        # TODO check whether we can put everything into one batch
-        # data_list = g_real.to_data_list() + g_sim.to_data_list() + [g_mix]
-        # data_batch = Batch.from_data_list(data_list)
-
-        y_hat_real = self(g_real)
+        # forward passes
         y_hat_sim = self(g_sim)
+        y_hat_real = self(g_real)
         y_hat_mix = self(g_mix)
 
         sim_loss, mix_loss = calc_loss(
             y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn
         )
 
+        if beta > 0 and self.exchange_weights:
+            self.net.exchange_weights()
+            self.exchange_weights = False
+
         total_loss = sim_loss + beta * mix_loss
         # optionally add l1 and l2 regularization
-        l1_loss = ln_loss(self.net, n=1, ln_lambda=self.l1_lambda, only_matrices=True)
+        l1_loss = ln_loss(self.net, n=1, only_matrices=True)
         self.log("train/l1_loss", l1_loss)
-        total_loss += l1_loss
+        total_loss += self.l1_lambda * l1_loss
 
-        l2_loss = ln_loss(self.net, n=2, ln_lambda=self.l2_lambda, only_matrices=True)
+        l2_loss = ln_loss(self.net, n=2, only_matrices=True)
         self.log("train/l2_loss", l2_loss)
-        total_loss += l2_loss
+        total_loss += self.l2_lambda * l2_loss
 
         # log losses
-        self.log("train/total_loss", total_loss)
-        self.log("train/sim_loss", sim_loss)
-        self.log("train/mix_loss", mix_loss)
+        self.log(
+            "train/total_loss",
+            total_loss,
+        )
+        self.log("train/sim_loss", sim_loss, prog_bar=True)
+        self.log("train/mix_loss", mix_loss, prog_bar=True)
         self.log("train/beta", beta)
 
         return total_loss
@@ -165,7 +173,31 @@ class DeconvolutionModel(pl.LightningModule):
         data = val_batch[0]
         y_hat = self(data)
         y = data.y
-        if self.st_data is not None and self.celltype_names is not None:
+
+        # check if we have ground truth
+        if y is not None:
+            mean_rmse, mean_corr, mean_ccc = compare_with_gt(
+                y_hat.cpu().detach().numpy(), y.cpu().detach().numpy()
+            )
+            self.log("validation/mean_rmse", mean_rmse)
+            self.log("validation/mean_corr", mean_corr)
+            self.log("validation/mean_ccc", mean_ccc)
+
+        if self.save_predictions:
+            y_hat_df = pd.DataFrame(y_hat.cpu().detach().numpy())
+            if self.celltype_names is not None:
+                y_hat_df.columns = self.celltype_names
+            if self.sample_names is not None:
+                y_hat_df["sample_names"] = self.sample_names
+            self.logger.log_table(
+                f"predictions-step-{self.global_step}", dataframe=y_hat_df
+            )
+
+        if (
+            self.plotting
+            and self.st_data is not None
+            and self.celltype_names is not None
+        ):
             celltype_indices = np.array(np.argmax(y_hat.cpu().detach().numpy(), axis=1))
             # map celltypes onto celltype list
             pred_celltypes = [self.celltype_names[i] for i in celltype_indices]
@@ -182,22 +214,6 @@ class DeconvolutionModel(pl.LightningModule):
             )
             del self.st_data.uns["celltype_colors"]
 
-        # check if we have ground truth
-        if y is not None:
-            mean_rmse, mean_corr = compare_with_gt(
-                y_hat.cpu().detach().numpy(), y.cpu().detach().numpy()
-            )
-            self.log("validation/mean_rmse", mean_rmse)
-            self.log("validation/mean_corr", mean_corr)
-        # in any case save predictions
-        y_hat_df = pd.DataFrame(y_hat.cpu().detach().numpy())
-        if self.celltype_names is not None:
-            y_hat_df.columns = self.celltype_names
-        if self.sample_names is not None:
-            y_hat_df["sample_names"] = self.sample_names
-        self.logger.log_table(
-            f"predictions-step-{self.global_step}", dataframe=y_hat_df
-        )
         return y_hat
 
 
@@ -206,7 +222,8 @@ def compare_with_gt(y_hat, y):
     # average rmse cell type wise
     mean_rmse = calc_mean_rmse(y_hat, y)[0]
     mean_corr = calc_mean_corr(y_hat, y)[0]
-    return mean_rmse, mean_corr
+    mean_ccc = np.mean(calc_ccc(y, y_hat, samplewise=False))
+    return mean_rmse, mean_corr, mean_ccc
 
 
 def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn="kl_div"):
@@ -285,11 +302,11 @@ def convert_fig_to_array(fig):
     return im
 
 
-def ln_loss(model, n=1, ln_lambda=1e-5, only_matrices=True):
+def ln_loss(model, n=1, only_matrices=True):
     ln_reg = 0.0
     for w in model.parameters():
         if len(w.shape) == 1 and only_matrices:
             continue
         else:
             ln_reg += torch.sum(torch.pow(torch.abs(w), n))
-    return ln_lambda * ln_reg
+    return ln_reg
