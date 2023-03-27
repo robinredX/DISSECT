@@ -1,0 +1,12 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /net: transformer.yaml
+  - override /trainer: default.yaml
+
+trainer:
+  devices:
+    - 6

@@ -12,6 +12,7 @@ encoder_kwargs:
   fusion: ""
   use_ffn: False
   num_layers: 1
+  num_heads: 1
 decoder_kwargs:
   num_layers: 2
   hidden_channels: 64

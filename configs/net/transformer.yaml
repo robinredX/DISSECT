@@ -1,0 +1,16 @@
+_target_: src.models.dissect_spatial.DissectSpatial
+latent_dim: 128
+activation: relu6
+use_pos: true
+use_id: true
+encoder_type: "transformer"
+encoder_kwargs: 
+  norm: batch_norm
+  num_heads: 4
+  use_ffn: true
+  num_layers: 2
+  skip_connections: true
+  ff_hidden_dim: 256
+decoder_kwargs:
+  num_layers: 2
+  hidden_channels: 64
