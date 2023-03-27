@@ -28,6 +28,8 @@ class TransformerEncoder(nn.Module):
         init_embed_hidden_channels=[512, 256],
     ) -> None:
         super().__init__()
+        if norm == "None":
+            norm = None
         self.mlp = MLP(
             [-1, *init_embed_hidden_channels, latent_dim],
             norm=None,
