@@ -1,21 +1,28 @@
+# ignore files
 **.c
 **.pyx
-/data
-**/__pycache__
 **.so
 **.pdf
 **.o
 **.h5ad
-PropsSimulator/experiment*
-PropsSimulator/simulation/*
-experiment**/*
 
+# ignore all experiment folders
+PropsSimulator/experiment**
+PropsSimulator/simulation/*
+experiments/*
+experiment*/
+!configs/experiment
+
+# other folders to ignore
+data/
+outputs/
+logs/
 wandb/
 checkpoints/
 figures/
-outputs/
-logs/
 
 .vscode
 
 **/media
+**/__pycache__
+
