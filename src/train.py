@@ -71,6 +71,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         "cfg": cfg,
         "datamodule": datamodule,
         "model": model,
+        "net": net,
         "callbacks": callbacks,
         "logger": logger,
         "trainer": trainer,
