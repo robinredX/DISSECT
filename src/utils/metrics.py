@@ -1,6 +1,28 @@
 import numpy as np
 import pandas as pd
+from scipy.spatial import distance
 
+def calc_jsd(y_true, y_pred):
+    # y_true.shape = (n_samples, n_celltypes)
+    # y_pred.shape = (n_samples, n_celltypes)
+    jsds = np.square(distance.jensenshannon(y_true, y_pred, axis=1))
+    return jsds
+
+def calc_jsd_df(df_true, df_pred, verbose=0, exclude_cols=None):
+    if exclude_cols is not None:
+        df_true = df_true.drop(exclude_cols, axis=1)
+        df_pred = df_pred.drop(exclude_cols, axis=1)
+    # make sure the columns are the same
+    df_true = df_true[df_pred.columns]
+    jsds = calc_jsd(df_true.values, df_pred.values)
+    mean_jsd = np.mean(jsds)
+    if verbose > 1:
+        for k, col in enumerate(df_true.columns):
+            print(f"JSD {col}: {jsds[k]}")
+    if verbose > 0:
+        print(f"Mean JSD: {mean_jsd}")
+
+    return mean_jsd, jsds
 
 def ccc_fn(y_true, y_pred):
     # y_true.shape = (1, n_celltypes)
@@ -117,6 +139,8 @@ def calc_mean_rmse_df(df_1, df_2, verbose=2, exclude_cols=None, samplewise=False
 
 
 def calc_metrics_df(df_true, df_pred, verbose=1, exclude_cols=None, samplewise=False):
+    
+    
     mean_corr, corrs = calc_mean_corr_df(
         df_true, df_pred, verbose=verbose, exclude_cols=exclude_cols, transpose=not samplewise
     )
@@ -128,11 +152,17 @@ def calc_metrics_df(df_true, df_pred, verbose=1, exclude_cols=None, samplewise=F
     mean_ccc, cccs = calc_ccc_df(
         df_true, df_pred, verbose=verbose, exclude_cols=exclude_cols, samplewise=samplewise
     )
-
     metrics_names = ["correlation", "RMSE", "CCC"]
+    metrics = [corrs, rmses, cccs]
+    
     if samplewise:
         metrics_names = [f"{name} (samplewise)" for name in metrics_names]
-    metrics = [corrs, rmses, cccs]
+        mean_jsd, jsds = calc_jsd_df(
+            df_true, df_pred, verbose=verbose, exclude_cols=exclude_cols
+        )
+        metrics_names.append("JSD")
+        metrics.append(jsds)
+         
     metrics_df = pd.DataFrame(
         {name: metric for name, metric in zip(metrics_names, metrics)}
     )
