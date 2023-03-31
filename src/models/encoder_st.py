@@ -48,7 +48,7 @@ class MultiChannelGNNEncoder(nn.Module):
         self.layers = ModuleList()
         for layer in range(num_layers):
             self.layers.append(
-                BiChannelGNNBlock(
+                MultiChannelGNNBlock(
                     latent_dim,
                     activation=activation,
                     dropout=dropout,
@@ -78,7 +78,7 @@ class MultiChannelGNNEncoder(nn.Module):
         return x
 
 
-class BiChannelGNNBlock(nn.Module):
+class MultiChannelGNNBlock(nn.Module):
     def __init__(
         self,
         latent_dim,
