@@ -100,6 +100,9 @@ class DeconvolutionModel(pl.LightningModule):
         wandb.define_metric("validation/mean_corr", summary="max")
         wandb.define_metric("validation/mean_rmse", summary="min")
         wandb.define_metric("validation/mean_ccc", summary="max")
+        wandb.define_metric("validation/mean_corr_", hidden=True)
+        wandb.define_metric("validation/mean_rmse_", hidden=True)
+        wandb.define_metric("validation/mean_ccc_", hidden=True)
 
     # by default runs the forward method
     def predict_step(self, batch, idx):
@@ -182,6 +185,9 @@ class DeconvolutionModel(pl.LightningModule):
             self.log("validation/mean_rmse", mean_rmse)
             self.log("validation/mean_corr", mean_corr)
             self.log("validation/mean_ccc", mean_ccc)
+            self.log("validation/mean_rmse_", mean_rmse)
+            self.log("validation/mean_corr_", mean_corr)
+            self.log("validation/mean_ccc_", mean_ccc)
 
         if self.save_predictions:
             y_hat_df = pd.DataFrame(y_hat.cpu().detach().numpy())
