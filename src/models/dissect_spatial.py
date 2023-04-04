@@ -19,6 +19,7 @@ from src.models.components.ffn import FeedForwardBlock
 from src.models.transformer import TransformerEncoder
 from src.models.encoder_st import MultiChannelGNNEncoder
 from src.models.encoder_sc import SingleCellEncoder
+from src.models.encoder.hybrid_encoder import HybridEncoder
 
 
 class DissectSpatial(nn.Module):
@@ -46,6 +47,61 @@ class DissectSpatial(nn.Module):
             raise ValueError(
                 f"encoder_type {encoder_type} not supported, choose from ['transformer', 'gnn']"
             )
+        self.decoder = CelltypeDecoder(
+            latent_dim, num_celltypes, activation=activation, **decoder_kwargs
+        )
+        self.use_pos = use_pos
+        self.use_id = use_id
+
+    def forward(
+        self,
+        x,
+        edge_index,
+        edge_weight=None,
+        edge_attr=None,
+        pos=None,
+        batch=None,
+        id=None,
+    ):
+        if pos is not None and self.use_pos:
+            x = torch.cat([x, pos], dim=-1)
+        if id is not None and self.use_id:
+            x = torch.cat([x, id], dim=-1)
+        z = self.encoder(
+            x,
+            edge_index=edge_index,
+            edge_weight=edge_weight,
+            edge_attr=edge_attr,
+            pos=pos,
+            batch=batch,
+        )
+        out = self.decoder(z)
+        return out
+
+    def reset_parameters(self):
+        # requires that all parameters are initialized beforehand
+        for w in self.parameters():
+            if len(w.shape) == 1:
+                zeros(w)
+            else:
+                glorot(w)
+
+
+class DissectSpatialHybrid(nn.Module):
+    def __init__(
+        self,
+        num_celltypes,
+        latent_dim,
+        activation="relu",
+        use_pos=True,
+        use_id=False,
+        encoder_kwargs={},
+        decoder_kwargs={},
+    ) -> None:
+        super().__init__()
+        self.encoder = HybridEncoder(
+            latent_dim, activation=activation, **encoder_kwargs
+        )
         self.decoder = CelltypeDecoder(
             latent_dim, num_celltypes, activation=activation, **decoder_kwargs
         )
