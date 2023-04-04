@@ -1,0 +1,19 @@
+_target_: src.models.dissect_spatial.DissectSpatialHybrid
+latent_dim: 128
+activation: relu6
+use_pos: true
+use_id: true
+encoder_kwargs: 
+  num_gnn_layers: 1
+  num_transformer_layers: 1
+  dropout: 0.0
+  norm: batch_norm
+  num_heads: 4
+  spatial_conv_kwargs: {}
+  ff_hidden_dim: 256
+  bias: true
+  skip_connections: true
+  init_embed_hidden_channels: [512, 256]
+decoder_kwargs:
+  num_layers: 2
+  hidden_channels: 64

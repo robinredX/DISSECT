@@ -1,0 +1,73 @@
+program: src/train.py
+method: random
+metric:
+  goal: maximize
+  name: validation/mean_ccc_
+parameters:
+  experiment:
+    value: hybrid
+  logger.wandb.mode: 
+    value: "online"
+  data.radius: 
+    values: [0.02, 0.03, 0.04]
+    distribution: categorical
+  data.st_path:
+    value: ${paths.data_dir}/spatial/simulations_kidney_slideSeq_v2/UMOD-WT.WT-2a_resolution75.h5ad
+  data.reference_dir:
+    value: ${paths.root_dir}/experiments/experiment_kidney_slideSeq_v2_UMOD-WT.WT-2a_resolution75
+  model.alpha_max: 
+    min: 0.1
+    max: 0.5
+    distribution: uniform
+  model.alpha_min:
+    min: 0.0
+    max: 0.1
+    distribution: uniform
+  model.learning_rate:
+    min: 1.0e-5
+    max: 1.0e-3
+    distribution: uniform
+  model.beta:
+    values: ["None", 5.0]
+    distribution: categorical
+  model.weight_decay:
+    min: 0.0
+    max: 1.0e-4
+    distribution: uniform
+  net.latent_dim:
+    values: [64, 128, 256]
+    distribution: categorical
+  net.activation:
+    values: ["relu", "relu6"]
+    distribution: categorical
+  net.use_pos:
+    values: [True, False]
+    distribution: categorical
+  net.use_id:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.num_gnn_layers:
+    values: [1, 2]
+    distribution: categorical
+  net.encoder_kwargs.num_transformer_layers:
+    values: [1, 2, 3]
+    distribution: categorical
+  net.encoder_kwargs.norm:
+    values: ["batch_norm"]
+    distribution: categorical
+  net.encoder_kwargs.num_heads:
+    values: [4, 8]
+    distribution: categorical
+  net.encoder_kwargs.skip_connections:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.ff_hidden_dim:
+    values: [256, 512]
+    distribution: categorical
+
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
