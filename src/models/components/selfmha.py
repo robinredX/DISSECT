@@ -15,7 +15,7 @@ class MultiHeadSelfAttention(MultiheadAttention):
         add_zero_attn=False,
         kdim=None,
         vdim=None,
-        batch_first=False,
+        batch_first=True,
         device=None,
         dtype=None,
     ) -> None:
@@ -37,19 +37,21 @@ class MultiHeadSelfAttention(MultiheadAttention):
         self,
         x: Tensor,
         key_padding_mask=None,
-        need_weights=False,
         attn_mask=None,
         average_attn_weights: bool = True,
     ):
+        if len(x.shape) < 3:
+            x = x.unsqueeze(0)
         query = x
         key = x
         value = x
-        return super().forward(
+        out, attn_weights = super().forward(
             query,
             key,
             value,
             key_padding_mask,
-            need_weights,
+            True,
             attn_mask,
             average_attn_weights,
         )
+        return out.squeeze(0), attn_weights

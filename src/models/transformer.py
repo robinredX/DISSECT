@@ -57,15 +57,12 @@ class TransformerEncoder(nn.Module):
         x = self.mlp(x)
         # make sure the shape of x is correct
         # convert node features to dense tensor
-        if len(x.shape) < 3:
-            x = x.unsqueeze(0)
         # TODO: mask attention weights for sim graph
         for layer in self.layers:
             if self.skip_connections:
                 x = layer(x) + x
             else:
                 x = layer(x)
-        x = x.squeeze(0)
         return x
 
 
@@ -104,8 +101,6 @@ class TransformerBlock(nn.Module):
     def forward(self, x, **kwargs):
         out, _ = self.selfmha(x)
         if self.use_ffn:
-            out = out.squeeze(0)
-            x = x.squeeze(0)
             out = self.norm1(x + out)
             out_ffn = self.ffn(out)
             out = self.norm2(out + out_ffn)
