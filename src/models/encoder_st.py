@@ -127,7 +127,9 @@ class MultiChannelGNNBlock(nn.Module):
         assert num_channels > 0, "No channels selected"
 
         self.fusion = fusion
-        if "concat" in fusion:
+        if fusion is None:
+            pass
+        elif "concat" in fusion:
             self.concat_linear = nn.LazyLinear(latent_dim)
         elif fusion == "gating":
             self.gating_unit = GatingUnit(num_inputs=num_channels)
