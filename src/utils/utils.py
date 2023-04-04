@@ -58,7 +58,7 @@ def task_wrapper(task_func: Callable) -> Callable:
     return wrap
 
 
-def extras(cfg: DictConfig) -> None:
+def extras(cfg: DictConfig, save_config=True) -> None:
     """Applies optional utilities before the task is started.
     Utilities:
     - Ignoring python warnings
@@ -84,7 +84,7 @@ def extras(cfg: DictConfig) -> None:
     # pretty print config tree using Rich library
     if cfg.extras.get("print_config"):
         log.info("Printing config tree with Rich! <cfg.extras.print_config=True>")
-        rich_utils.print_config_tree(cfg, resolve=True, save_to_file=True)
+        rich_utils.print_config_tree(cfg, resolve=True, save_to_file=save_config)
 
 
 def instantiate_callbacks(callbacks_cfg: DictConfig) -> List[Callback]:
@@ -142,6 +142,7 @@ def log_hyperparameters(object_dict: dict) -> None:
         log.warning("Logger not found! Skipping hyperparameter logging...")
         return
 
+    hparams["net"] = cfg["net"]
     hparams["model"] = cfg["model"]
 
     # save number of model parameters
