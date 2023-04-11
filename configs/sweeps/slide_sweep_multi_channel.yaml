@@ -1,0 +1,104 @@
+program: src/train.py
+method: random
+metric:
+  goal: maximize
+  name: validation/mean_ccc_
+parameters:
+  experiment:
+    value: "multi_channel"
+  logger.wandb.mode: 
+    value: "online"
+  data.radius: 
+    values: [0.02, 0.03, 0.04]
+    distribution: categorical
+  data.st_path:
+    value: ${paths.data_dir}/spatial/simulations_kidney_slideSeq_v2/UMOD-WT.WT-2a_resolution75.h5ad
+  data.reference_dir:
+    value: ${paths.root_dir}/experiments/experiment_kidney_slideSeq_v2_UMOD-WT.WT-2a_resolution75
+  
+  # model args
+  model.alpha_max: 
+    values: [0.1, 0.2, 0.5]
+    distribution: categorical
+  model.alpha_min:
+    values: [0.0]
+    distribution: categorical
+  model.learning_rate:
+    values: [1.0e-3, 1.0e-4, 1.0e-5]
+    distribution: categorical
+  model.beta:
+    values: ["None", 7.5]
+    distribution: categorical
+  # model.l1_lambda:
+  #   min: 0.0
+  #   max: 1.0e-5
+  #   distribution: categorical
+  model.l2_lambda:
+    values: [1.0e-5, 1.0e-6]
+    distribution: categorical
+  # model.weight_decay:
+  #   values: [1.0e-4, 1.0e-5]
+  #   distribution: categorical
+  
+  # net args
+  net.latent_dim:
+    values: [64, 128, 256]
+    distribution: categorical
+  net.activation:
+    values: ["relu", "relu6"]
+    distribution: categorical
+  net.use_pos:
+    values: [False]
+    distribution: categorical
+  net.use_id:
+    values: [False]
+    distribution: categorical
+  net.encoder_type:
+    value: "gnn"
+  net.encoder_kwargs.use_pos:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.use_id:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.norm:
+    values: ["batch_norm"]
+    distribution: categorical
+  net.encoder_kwargs.fusion:
+    values: ["concat", "concat_skip", "concat_simple", "gating"]
+    distribution: categorical
+  net.encoder_kwargs.use_ffn:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.ff_hidden_dim:
+    values: [256]
+    distribution: categorical
+  net.encoder_kwargs.spatial_channel:
+    value: True
+  net.encoder_kwargs.mha_channel:
+    values: [False, True]
+    distribution: categorical
+  net.encoder_kwargs.lin_channel:
+    values: [False, True]
+    distribution: categorical
+  net.encoder_kwargs.num_layers:
+    values: [1, 2, 3]
+    distribution: categorical
+  net.encoder_kwargs.inter_skip:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.num_heads:
+    values: [2, 4, 8]
+    distribution: categorical
+  net.encoder_kwargs.plain_last:
+    values: [True, False]
+    distribution: categorical
+  net.encoder_kwargs.dropout:
+    values: [0.0]
+    distribution: categorical
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
