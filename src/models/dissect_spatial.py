@@ -13,7 +13,6 @@ from torch.nn import MultiheadAttention
 from torch_geometric.nn import knn_graph
 from torch_geometric.nn.dense.linear import Linear as PygLinear
 
-from src.models.components.fusion import GatingUnit
 from src.models.decoder import CelltypeDecoder, GeneExpressionDecoder
 from src.models.components.ffn import FeedForwardBlock
 from src.models.transformer import TransformerEncoder
@@ -28,20 +27,31 @@ class DissectSpatial(nn.Module):
         num_celltypes,
         latent_dim,
         activation="relu",
-        use_pos=True,
         encoder_type="gnn",
-        use_id=False,
         encoder_kwargs={},
         decoder_kwargs={},
+        use_pos=True,
+        use_id=False,
     ) -> None:
         super().__init__()
+        # differentiate between outer positional encoding and inner one
+        if "use_pos" in encoder_kwargs:
+            if encoder_kwargs["use_pos"]:
+                use_pos = False
+        if "use_id" in encoder_kwargs:
+            if encoder_kwargs["use_id"]:
+                use_id = False
+
+        self.encoder_type = encoder_type
         if encoder_type == "transformer":
             self.encoder = TransformerEncoder(
                 latent_dim, activation=activation, **encoder_kwargs
             )
         elif encoder_type == "gnn":
             self.encoder = MultiChannelGNNEncoder(
-                latent_dim, activation=activation, **encoder_kwargs
+                latent_dim,
+                activation=activation,
+                **encoder_kwargs,
             )
         else:
             raise ValueError(
@@ -63,6 +73,7 @@ class DissectSpatial(nn.Module):
         batch=None,
         id=None,
     ):
+        # TODO: refactor transformer encoder to accept pos and id
         if pos is not None and self.use_pos:
             x = torch.cat([x, pos], dim=-1)
         if id is not None and self.use_id:
@@ -74,6 +85,7 @@ class DissectSpatial(nn.Module):
             edge_attr=edge_attr,
             pos=pos,
             batch=batch,
+            id=id,
         )
         out = self.decoder(z)
         return out
