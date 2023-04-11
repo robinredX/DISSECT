@@ -36,7 +36,7 @@ class DeconvolutionModel(pl.LightningModule):
         log_hparams=True,
     ):
         super().__init__()
-        
+
         self.net = net
         self.weight_decay = weight_decay
         self.l1_lambda = l1_lambda
@@ -97,12 +97,24 @@ class DeconvolutionModel(pl.LightningModule):
             self.datamodule.move_to_device(self.device)
         else:
             pass
-        wandb.define_metric("validation/mean_corr", summary="max")
-        wandb.define_metric("validation/mean_rmse", summary="min")
-        wandb.define_metric("validation/mean_ccc", summary="max")
-        wandb.define_metric("validation/mean_corr_", hidden=True)
-        wandb.define_metric("validation/mean_rmse_", hidden=True)
-        wandb.define_metric("validation/mean_ccc_", hidden=True)
+        wandb.define_metric(
+            "validation/mean_corr", summary="max", step_metric="trainer/global_step"
+        )
+        wandb.define_metric(
+            "validation/mean_rmse", summary="min", step_metric="trainer/global_step"
+        )
+        wandb.define_metric(
+            "validation/mean_ccc", summary="max", step_metric="trainer/global_step"
+        )
+        wandb.define_metric(
+            "validation/mean_corr_", hidden=True, step_metric="trainer/global_step"
+        )
+        wandb.define_metric(
+            "validation/mean_rmse_", hidden=True, step_metric="trainer/global_step"
+        )
+        wandb.define_metric(
+            "validation/mean_ccc_", hidden=True, step_metric="trainer/global_step"
+        )
 
     # by default runs the forward method
     def predict_step(self, batch, idx):
