@@ -1,4 +1,4 @@
-name: dissect_spatial
+name: dissect-spatial
 channels:
   - pyg
   - pytorch
@@ -265,4 +265,4 @@ dependencies:
       - ypy-websocket==0.8.2
       - zarr==2.14.1
       - zipp==3.13.0
-prefix: /root/miniconda3/envs/dissect_spatial
+prefix: /root/miniconda3/envs/dissect-spatial
