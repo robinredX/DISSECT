@@ -25,13 +25,11 @@ class CelltypeDecoder(nn.Module):
             act=activation,
             **kwargs
         )
-        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
-        x = self.mlp(x)
-        x = self.softmax(x)
+        logits = self.mlp(x)
 
-        return x
+        return logits
 
 
 class GeneExpressionDecoder(nn.Module):

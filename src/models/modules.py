@@ -119,7 +119,7 @@ class DeconvolutionModel(pl.LightningModule):
     # by default runs the forward method
     def predict_step(self, batch, idx):
         # select real graph
-        return self(batch[0])
+        return F.softmax(self(batch[0]), dim=-1)
 
     def training_step(self, train_batch, batch_idx):
         g_real, g_sim = train_batch
@@ -186,13 +186,13 @@ class DeconvolutionModel(pl.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         # TODO put into callback
         data = val_batch[0]
-        y_hat = self(data)
+        y_hat = F.softmax(self(data), dim=-1).cpu().detach().numpy()
         y = data.y
 
         # check if we have ground truth
         if y is not None:
             mean_rmse, mean_corr, mean_ccc = compare_with_gt(
-                y_hat.cpu().detach().numpy(), y.cpu().detach().numpy()
+                y_hat, y.cpu().detach().numpy()
             )
             self.log("validation/mean_rmse", mean_rmse)
             self.log("validation/mean_corr", mean_corr)
@@ -202,7 +202,8 @@ class DeconvolutionModel(pl.LightningModule):
             self.log("validation/mean_ccc_", mean_ccc)
 
         if self.save_predictions:
-            y_hat_df = pd.DataFrame(y_hat.cpu().detach().numpy())
+            print("Saving predictions...")
+            y_hat_df = pd.DataFrame(y_hat)
             if self.celltype_names is not None:
                 y_hat_df.columns = self.celltype_names
             if self.sample_names is not None:
@@ -216,7 +217,7 @@ class DeconvolutionModel(pl.LightningModule):
             and self.st_data is not None
             and self.celltype_names is not None
         ):
-            celltype_indices = np.array(np.argmax(y_hat.cpu().detach().numpy(), axis=1))
+            celltype_indices = np.array(np.argmax(y_hat, axis=1))
             # map celltypes onto celltype list
             pred_celltypes = [self.celltype_names[i] for i in celltype_indices]
             # add new column to adata
@@ -246,17 +247,17 @@ def compare_with_gt(y_hat, y):
 
 def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn="kl_div"):
     # compute mixture ground truth
-    y_mix = alpha * y_hat_real + (1 - alpha) * y_hat_sim
+    y_mix = alpha * F.softmax(y_hat_real, dim=-1) + (1 - alpha) * F.softmax(y_hat_sim, dim=-1)
     # calc kl divergence
     # requires log probabilities for the predicted input
     if sim_loss_fn == "kl_div":
         sim_loss = F.kl_div(
-            torch.log(y_hat_sim),
+            F.log_softmax(y_hat_sim, dim=-1),
             y_sim,
             reduction="batchmean",
         )
     elif sim_loss_fn == "mse":
-        sim_loss = F.mse_loss(y_hat_sim, y_sim)
+        sim_loss = F.mse_loss(F.softmax(y_hat_sim, dim=-1), y_sim)
     elif sim_loss_fn == "cross_entropy":
         sim_loss = F.cross_entropy(y_hat_sim, y_sim)
     elif sim_loss_fn == "js_div":
@@ -264,7 +265,7 @@ def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn="kl_di
     else:
         raise ValueError(f"sim_loss_fn {sim_loss_fn} not implemented")
     # calc mse
-    mix_loss = F.mse_loss(y_mix, y_hat_mix)
+    mix_loss = F.mse_loss(y_mix, F.softmax(y_hat_mix, dim=-1))
     return sim_loss, mix_loss
 
 
