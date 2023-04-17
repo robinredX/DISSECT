@@ -2,6 +2,7 @@ import wandb
 import json
 import pandas as pd
 from tqdm import tqdm
+import os
 
 
 def get_run_for_name(run_name, entity="dschaub", project="DISSECT-src"):
@@ -22,21 +23,43 @@ def get_run_config(run_name, entity="dschaub", project="DISSECT-src"):
         return None
 
 
-def get_result_for_run_name(run_name, entity="dschaub", project="dissect-spatial"):
+def get_result_for_run_name(run_name, entity="dschaub", project="dissect-spatial", verbose=0):
+    if verbose:
+        print("Loading", run_name)
     run = get_run_for_name(run_name, entity=entity, project=project)
-    # filter file
-    result_files = [
-        file for file in run.files() if "table" in file.name and "step-" in file.name
-    ]
-    # order files by step num
-    result_file = sorted(
-        result_files, key=lambda x: int(x.name.split("-")[-1].split("_")[0])
-    )[-1]
-    print("Loaded", result_file.name)
-    # load file in memory and convert to df
-    path = result_file.download(replace=False, exist_ok=True).name
+    return get_result_for_run(run, verbose=verbose)
+
+
+def get_result_for_run(run, verbose=0):
+    try:
+        # filter file
+        result_files = [
+            file for file in run.files() if "table" in file.name and "step-" in file.name
+        ]
+        # order files by step num
+        result_file = sorted(
+            result_files, key=lambda x: int(x.name.split("-")[-1].split("_")[0])
+        )[-1]
+        # load file in memory and convert to df
+        path = result_file.download(replace=False, exist_ok=True).name
+        name = result_file.name
+        assert "p-0" not in name, f"{run.name} has no result file"
+    except:
+        print("No result file found looking for artifacts instead")
+        # TODO
+        artifacts = [art for art in run.logged_artifacts() if "step5000" in art.name]
+        assert len(artifacts) == 1
+        name = artifacts[0].file().split("/")[-1]
+        base_path = "./wandb/artifacts"
+        path = artifacts[0].download(base_path)
+        path = f"{path}/{name}"
+
+    if verbose:
+        print("Loaded", name, "for run", run.name)
+    
     with open(path, "r") as f:
         result = json.load(f)
+    # os.remove(f"{path}")
     result_df = pd.DataFrame(result["data"], columns=result["columns"]).set_index(
         "sample_names"
     )
