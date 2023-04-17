@@ -186,3 +186,46 @@ def get_method_names(base_names, *identifiers):
     tmp["method_name"] = tmp["base_name"] + "-" + tmp["idx"].astype(str)
     method_names = tmp["method_name"].to_list()
     return method_names
+
+
+def results_to_df(
+    results,
+    dataset_names,
+    method_names,
+    dataset_map,
+    dataset_path_map,
+    dataset_filter=None,
+):
+    all_cellwise_results = []
+    all_samplewise_results = []
+    for k, v in dataset_map.items():
+        if "mouse" in k or "lymph" in k:
+            continue
+        if dataset_filter is not None and k not in dataset_filter:
+            continue
+        print(f"Loading groundtruth for {k}...")
+        groundtruth = load_groundtruth(dataset_path_map[k])
+        print(f"Loaded groundtruth {dataset_path_map[k]}...")
+
+        filtered_results = filter_data_by_dataset(k, dataset_names, results)
+        filtered_method_names = filter_data_by_dataset(k, dataset_names, method_names)
+
+        cellwise_results = compare_methods_new(
+            filtered_results,
+            groundtruth,
+            methods=filtered_method_names,
+            samplewise=False,
+        )
+        cellwise_results["dataset"] = k
+        all_cellwise_results.append(cellwise_results)
+        samplewise_results = compare_methods_new(
+            filtered_results,
+            groundtruth,
+            methods=filtered_method_names,
+            samplewise=True,
+        )
+        samplewise_results["dataset"] = k
+        all_samplewise_results.append(samplewise_results)
+    all_cellwise_results = pd.concat(all_cellwise_results, ignore_index=True)
+    all_samplewise_results = pd.concat(all_samplewise_results, ignore_index=True)
+    return all_cellwise_results, all_samplewise_results
