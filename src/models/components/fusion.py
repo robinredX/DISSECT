@@ -35,3 +35,30 @@ class GatingUnit(nn.Module):
         out = torch.sum(weights * channel_cat, dim=1)
         # out.shape = (batch*num_nodes, latent_dim)
         return out
+
+
+class FusionComponent(nn.Module):
+    def __init__(self, latent_dim, fusion="concat_skip") -> None:
+        super().__init__()
+        self.fusion = fusion
+        if fusion == "gating":
+            self.gating_unit = GatingUnit()
+        else:
+            self.concat_linear = nn.LazyLinear(latent_dim)
+
+    def forward(self, x, *channels):
+        if self.fusion == "gating":
+            out_fusion = self.gating_unit(x, *channels)
+        elif self.fusion == "concat":
+            out_concat = torch.cat([x, *channels], dim=-1)
+            out_fusion = self.concat_linear(out_concat)
+        elif self.fusion == "concat_skip":
+            out_concat = torch.cat(channels, dim=-1)
+            out_fusion = self.concat_linear(out_concat)
+            out_fusion = out_fusion + x
+        elif self.fusion == "concat_simple":
+            out_concat = torch.cat(channels, dim=-1)
+            out_fusion = self.concat_linear(out_concat)
+        else:
+            out_fusion = self.concat_linear(channels[0])
+        return out_fusion
