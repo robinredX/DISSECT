@@ -115,9 +115,8 @@ class MultiChannelGNNEncoder(nn.Module):
                 x_pos = self.sim_pos_enc(pos)
             else:
                 x_pos = self.pos_encoder(pos)
-            x_spatial = x + x_pos
         else:
-            x_spatial = None
+            x_pos = None
 
         for k, layer in enumerate(self.layers):
             # only add id and pos encoding to first layer input
@@ -125,7 +124,7 @@ class MultiChannelGNNEncoder(nn.Module):
                 if self.use_id:
                     x = x + self.id_encoder(id)
             else:
-                x_spatial = None
+                x_pos = None
             out_layer = layer(
                 x,
                 edge_index,
@@ -133,7 +132,7 @@ class MultiChannelGNNEncoder(nn.Module):
                 edge_attr,
                 pos,
                 batch,
-                x_spatial=x_spatial,
+                x_pos=x_pos,
             )
             if self.inter_skip:
                 x = x + out_layer
@@ -231,8 +230,7 @@ class MultiChannelGNNBlock(nn.Module):
         edge_attr=None,
         pos=None,
         batch=None,
-        # TODO: only provide pos encoding not combined with x
-        x_spatial=None,  # combined with positional encoding
+        x_pos=None,  # positional encoding for spatial channel
     ):
         # x.shape = (batch*num_nodes, latent_dim)
         if self.norm_first:
@@ -241,8 +239,9 @@ class MultiChannelGNNBlock(nn.Module):
         # TODO: check if conv takes edge weights or edge attributes
         channels = []
         if self.spatial_channel is not None:
-            if x_spatial is None:
-                x_spatial = x
+            x_spatial = x
+            if x_pos is not None:
+                x_spatial += x_pos
             if self.use_sparse:
                 adj = SparseTensor(
                     row=edge_index[0], col=edge_index[1], value=edge_attr
@@ -335,7 +334,7 @@ class MHAChannel(nn.Module):
     def __init__(
         self,
         latent_dim,
-        num_heads,
+        num_heads=8,
         num_layers=1,
         activation=None,
         norm=None,
