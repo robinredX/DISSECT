@@ -11,7 +11,7 @@ from torch_geometric.nn import knn_graph
 from torch_geometric.nn.dense.linear import Linear as PygLinear
 from torch_geometric.nn import GCNConv, GCN, MLP, TransformerConv, GATv2Conv
 
-from src.models.components.fusion import GatingUnit
+from src.models.components.fusion import GatingUnit, FusionComponent
 from src.models.components.ffn import FeedForwardBlock
 from src.models.components.selfmha import MultiHeadSelfAttention
 
@@ -27,23 +27,24 @@ class MultiChannelGNNEncoder(nn.Module):
         lin_channel=False,
         spatial_channel=True,
         num_heads=1,
-        spatial_conv_kwargs={},
+        spatial_channel_kwargs={},
         mha_channel=False,
+        mha_channel_kwargs={},
         latent_channel=False,
-        knn=6,
-        cosine=False,
-        latent_conv_kwargs={},
+        latent_channel_kwargs={},
         fusion=None,
         use_ffn=False,
         ff_hidden_dim=256,
         plain_last=False,
         norm_first=False,
+        norm_last=False,
         init_embed_hidden_channels=[512, 256],
         inter_skip=False,
         use_pos=False,
         sim_pos_enc=False,
         use_id=False,
-        use_sparse=False,
+        use_sparse=True,
+        **kwargs,
     ) -> None:
         super().__init__()
         if norm == "None":
@@ -66,17 +67,17 @@ class MultiChannelGNNEncoder(nn.Module):
                     lin_channel=lin_channel,
                     spatial_channel=spatial_channel,
                     num_heads=num_heads,
-                    spatial_conv_kwargs=spatial_conv_kwargs,
+                    spatial_channel_kwargs=spatial_channel_kwargs,
                     mha_channel=mha_channel,
+                    mha_channel_kwargs=mha_channel_kwargs,
                     latent_channel=latent_channel,
-                    knn=knn,
-                    cosine=cosine,
-                    latent_conv_kwargs=latent_conv_kwargs,
+                    latent_channel_kwargs=latent_channel_kwargs,
                     fusion=fusion,
                     use_ffn=use_ffn,
                     ff_hidden_dim=ff_hidden_dim,
                     plain_last=plain_last,
                     norm_first=norm_first,
+                    norm_last=norm_last,
                     use_sparse=use_sparse,
                 )
             )
@@ -117,7 +118,6 @@ class MultiChannelGNNEncoder(nn.Module):
             x_spatial = x + x_pos
         else:
             x_spatial = None
-        
 
         for k, layer in enumerate(self.layers):
             # only add id and pos encoding to first layer input
@@ -155,48 +155,44 @@ class MultiChannelGNNBlock(nn.Module):
         lin_channel=False,
         spatial_channel=True,
         num_heads=1,
-        spatial_conv_kwargs={},
+        spatial_channel_kwargs={},
         mha_channel=False,
+        mha_channel_kwargs={},
         latent_channel=False,
-        knn=6,
-        cosine=False,
-        latent_conv_kwargs={},
+        latent_channel_kwargs={},
         fusion=None,
         use_ffn=False,
         ff_hidden_dim=256,
         plain_last=False,
         norm_first=False,
-        use_sparse=False,
+        norm_last=False,
+        use_sparse=True,
+        # **kwargs,
     ) -> None:
         super().__init__()
-        self.spatial_channel = spatial_channel
+
+        self.spatial_channel = None
         if spatial_channel:
-            self.spatial_conv = GATv2Conv(
-                latent_dim,
-                latent_dim,
-                num_heads,
-                edge_dim=1,
-                add_self_loops=False,
-                **spatial_conv_kwargs,
+            self.spatial_channel = GNNChannel(
+                latent_dim, heads=num_heads, **spatial_channel_kwargs
             )
 
-        # extra conv with just self loops for simulated data
-        self.lin_channel = lin_channel
+        self.lin_channel = None
         if lin_channel:
-            self.lin_layer = PygLinear(
+            self.lin_channel = PygLinear(
                 latent_dim, latent_dim, weight_initializer="glorot"
             )
-
-        self.latent_channel = latent_channel
+        
+        self.latent_channel = None
         if latent_channel:
-            self.latent_conv = GATv2Conv(
-                latent_dim, latent_dim, num_heads, edge_dim=1, **latent_conv_kwargs
+            self.latent_channel = LatentChannel(
+                latent_dim, **latent_channel_kwargs
             )
 
-        self.mha_channel = mha_channel
+        self.mha_channel = None
         if mha_channel:
-            self.mha = MultiHeadSelfAttention(
-                latent_dim, num_heads, dropout=dropout, add_bias_kv=True
+            self.mha_channel = MHAChannel(
+                latent_dim, num_heads=num_heads, **mha_channel_kwargs
             )
 
         # make sure some channel is selected
@@ -204,10 +200,7 @@ class MultiChannelGNNBlock(nn.Module):
         assert num_channels > 0, "No channels selected"
 
         self.fusion = fusion if fusion is not None else ""
-        if fusion == "gating":
-            self.gating_unit = GatingUnit()
-        else:
-            self.concat_linear = nn.LazyLinear(latent_dim)
+        self.fusion_component = FusionComponent(latent_dim, fusion=self.fusion)
 
         self.use_ffn = use_ffn
         if use_ffn:
@@ -219,14 +212,15 @@ class MultiChannelGNNBlock(nn.Module):
         if norm is None:
             self.norm1 = Identity()
             self.norm2 = Identity()
+            self.norm3 = Identity()
         else:
             self.norm1 = normalization_resolver(norm, in_channels=latent_dim)
             self.norm2 = normalization_resolver(norm, in_channels=latent_dim)
+            self.norm3 = normalization_resolver(norm, in_channels=latent_dim)
 
-        self.knn = knn
-        self.cosine = cosine
         self.plain_last = plain_last
         self.norm_first = norm_first
+        self.norm_last = norm_last
         self.use_sparse = use_sparse
 
     def forward(
@@ -237,7 +231,8 @@ class MultiChannelGNNBlock(nn.Module):
         edge_attr=None,
         pos=None,
         batch=None,
-        x_spatial=None,
+        # TODO: only provide pos encoding not combined with x
+        x_spatial=None,  # combined with positional encoding
     ):
         # x.shape = (batch*num_nodes, latent_dim)
         if self.norm_first:
@@ -245,46 +240,30 @@ class MultiChannelGNNBlock(nn.Module):
 
         # TODO: check if conv takes edge weights or edge attributes
         channels = []
-        if self.spatial_channel:
+        if self.spatial_channel is not None:
             if x_spatial is None:
                 x_spatial = x
             if self.use_sparse:
                 adj = SparseTensor(
                     row=edge_index[0], col=edge_index[1], value=edge_attr
                 )
-                out_spatial = self.spatial_conv(x_spatial, adj.t())
+                out_spatial = self.spatial_channel(x_spatial, adj.t())
             else:
-                out_spatial = self.spatial_conv(
+                out_spatial = self.spatial_channel(
                     x_spatial, edge_index, edge_attr=edge_attr
                 )
             channels.append(out_spatial)
             # might need projection back to latent dim
-        if self.lin_channel:
-            channels.append(self.lin_layer(x))
-        if self.latent_channel:
-            latent_edge_index = self.construct_latent_graph(x, batch)
+        if self.lin_channel is not None:
+            channels.append(self.lin_channel(x))
+        if self.latent_channel is not None:
             # might need projection back to latent dim
-            channels.append(self.latent_conv(x, latent_edge_index))
-        if self.mha_channel:
-            channels.append(self.mha(x)[0])
+            channels.append(self.latent_channel(x, batch))
+        if self.mha_channel is not None:
+            channels.append(self.mha_channel(x))
 
-        # fusion should be dependent on the type of the input: real, sim, or mix
-        # maybe input extra onehot encoding of type of input
-
-        if self.fusion == "gating":
-            out_fusion = self.gating_unit(x, *channels)
-        elif self.fusion == "concat":
-            out_concat = torch.cat([x, *channels], dim=-1)
-            out_fusion = self.concat_linear(out_concat)
-        elif self.fusion == "concat_skip":
-            out_concat = torch.cat(channels, dim=-1)
-            out_fusion = self.concat_linear(out_concat)
-            out_fusion = out_fusion + x
-        elif self.fusion == "concat_simple":
-            out_concat = torch.cat(channels, dim=-1)
-            out_fusion = self.concat_linear(out_concat)
-        else:
-            out_fusion = self.concat_linear(channels[0])
+        # fuse channels
+        out_fusion = self.fusion_component(x, *channels)
 
         # perform normalization and feed forward
         if self.use_ffn:
@@ -297,10 +276,136 @@ class MultiChannelGNNBlock(nn.Module):
         else:
             out = out_fusion
 
+        if self.norm_last:
+            out = self.norm2(out)
+
         if not self.plain_last:
             out = self.activation(out)
 
         return out
+    
+
+# maybe implement extra class for spatial channel and latent channel
+class GNNChannel(nn.Module):
+    def __init__(
+        self,
+        latent_dim,
+        num_layers=1,
+        edge_dim=1,
+        activation=None,
+        norm=None,
+        dropout=0.0,
+        residuals=False,
+        **conv_kwargs,
+    ):
+        super().__init__()
+        self.convs = nn.ModuleList()
+        self.norms = nn.ModuleList()
+        self.dropouts = nn.ModuleList()
+        self.activations = nn.ModuleList()
+        for i in range(num_layers):
+            self.convs.append(
+                GATv2Conv(
+                    latent_dim,
+                    latent_dim,
+                    edge_dim=edge_dim,
+                    add_self_loops=False,
+                    **conv_kwargs,
+                )
+            )
+            self.norms.append(normalization_resolver(norm, in_channels=latent_dim))
+            self.dropouts.append(nn.Dropout(dropout))
+            self.activations.append(activation_resolver(activation))
+        self.residuals = residuals
+
+    def forward(self, x, edge_index, edge_attr=None):
+        for conv, norm, act, dropout in zip(
+            self.convs, self.norms, self.activations, self.dropouts
+        ):
+            x = conv(x, edge_index, edge_attr=edge_attr)
+            if norm is not None:
+                x = norm(x)
+            if act is not None:
+                x = act(x)
+            x = dropout(x)
+        return x
+
+
+class MHAChannel(nn.Module):
+    def __init__(
+        self,
+        latent_dim,
+        num_heads,
+        num_layers=1,
+        activation=None,
+        norm=None,
+        dropout=0.0,
+        bias=True,
+        add_bias_kv=True,
+        add_zero_attn=False,
+    ):
+        super().__init__()
+        self.convs = nn.ModuleList()
+        self.norms = nn.ModuleList()
+        self.dropouts = nn.ModuleList()
+        self.activations = nn.ModuleList()
+        for i in range(num_layers):
+            self.convs.append(
+                MultiHeadSelfAttention(
+                    latent_dim,
+                    num_heads,
+                    dropout=dropout,
+                    bias=bias,
+                    add_bias_kv=add_bias_kv,
+                    add_zero_attn=add_zero_attn,
+                )
+            )
+            self.norms.append(normalization_resolver(norm, in_channels=latent_dim))
+            self.dropouts.append(nn.Dropout(dropout))
+            self.activations.append(activation_resolver(activation))
+
+    def forward(self, x):
+        for conv, norm, act, dropout in zip(
+            self.convs, self.norms, self.activations, self.dropouts
+        ):
+            x = conv(x)[0]
+            if norm is not None:
+                x = norm(x)
+            if act is not None:
+                x = act(x)
+            x = dropout(x)
+        return x
+
+
+class LatentChannel(GNNChannel):
+    def __init__(
+        self,
+        latent_dim,
+        knn=6,
+        cosine=False,
+        num_layers=1,
+        activation=None,
+        norm=None,
+        dropout=0.0,
+        residuals=False,
+        **conv_kwargs,
+    ):
+        super().__init__(
+            latent_dim,
+            num_layers=num_layers,
+            edge_dim=None,
+            activation=activation,
+            norm=norm,
+            dropout=dropout,
+            residuals=residuals,
+            **conv_kwargs,
+        )
+        self.knn = knn
+        self.cosine = cosine
+
+    def forward(self, x, batch):
+        edge_index = self.construct_latent_graph(x, batch)
+        return super().forward(x, edge_index)
 
     def construct_latent_graph(self, x, batch):
         # compute pairwise distances between all embeddings
