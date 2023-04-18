@@ -151,7 +151,10 @@ class DeconvolutionModel(pl.LightningModule):
         # change loss function based on global step
         # should be done in a callback
         if self.beta is None:
-            beta = beta_scheduler(self.global_step, max_steps=self.trainer.max_steps)
+            beta = beta_scheduler(self.global_step, max_steps=5000)
+            # beta = beta_scheduler_v2(
+            #     self.global_step, pre_maxsteps=1000, slope=0.01, max_val=20
+            # )
         else:
             beta = self.beta
 
@@ -253,7 +256,9 @@ def compare_with_gt(y_hat, y):
 
 def calc_loss(y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn="kl_div"):
     # compute mixture ground truth
-    y_mix = alpha * F.softmax(y_hat_real, dim=-1) + (1 - alpha) * F.softmax(y_hat_sim, dim=-1)
+    y_mix = alpha * F.softmax(y_hat_real, dim=-1) + (1 - alpha) * F.softmax(
+        y_hat_sim, dim=-1
+    )
     # calc kl divergence
     # requires log probabilities for the predicted input
     if sim_loss_fn == "kl_div":
@@ -308,6 +313,13 @@ def beta_scheduler(
         return phase_1_val
     else:
         return phase_2_val
+
+
+def beta_scheduler_v2(step, pre_maxsteps=1000, slope=0.01, max_val=25):
+    if step < pre_maxsteps:
+        return 0.0
+    else:
+        return min(max_val, slope * (step - pre_maxsteps))
 
 
 def buffer_plot_and_get(fig):
