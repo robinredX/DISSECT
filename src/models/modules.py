@@ -30,6 +30,7 @@ class DeconvolutionModel(pl.LightningModule):
         alpha_min=0.1,
         alpha_max=0.9,
         normalize=True,
+        g_mix_from_g_real=True,
         move_data_to_device=False,
         plotting=True,
         save_predictions=True,
@@ -51,6 +52,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
         self.normalize = normalize
+        self.g_mix_from_g_real = g_mix_from_g_real
         self.move_data_to_device = move_data_to_device
         self.exchange_weights = False
         self.plotting = plotting
@@ -129,13 +131,17 @@ class DeconvolutionModel(pl.LightningModule):
         alpha = alpha_scheduler(self.global_step, self.alpha_min, self.alpha_max)
 
         # TODO refine mixture graph definition
+        if self.g_mix_from_g_real:
+            base_graph = g_real
+        else:
+            base_graph = g_sim
         g_mix = Data(
             x=alpha * g_real.x + (1 - alpha) * g_sim.x,
-            edge_index=g_real.edge_index,
-            edge_weight=g_real.edge_weight,
-            edge_attr=g_real.edge_attr,
-            pos=g_real.pos,
-            batch=g_real.batch,
+            edge_index=base_graph.edge_index,
+            edge_weight=base_graph.edge_weight,
+            edge_attr=base_graph.edge_attr,
+            pos=base_graph.pos,
+            batch=base_graph.batch,
             id=torch.roll(g_sim.id, 1, 1),
         )
 
