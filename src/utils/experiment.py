@@ -13,6 +13,7 @@ def run_experiment(
     st_path,
     reference_dir,
     experiment_name=None,
+    project="dissect-spatial",
     wandb_mode="disabled",
     tags=None,
     sweep_id=None,
@@ -33,6 +34,7 @@ def run_experiment(
         exp_name = experiment_name
         overrides = [f"experiment={exp_name}"]
     else:
+        exp_name = None
         overrides = []
     # load base config
     hydra.core.global_hydra.GlobalHydra.instance().clear()
@@ -60,7 +62,6 @@ def run_experiment(
         config.trainer.enable_progress_bar = False
 
     if sweep_id is not None:
-        config.experiment = f"{sweep_id}_{exp_name}_test"
         tags = [sweep_id, f"{exp_name}", "test"]
         config.logger.wandb.tags = tags
         config.tags = tags
@@ -74,6 +75,7 @@ def run_experiment(
     config.model.plotting = plotting
     config.trainer.devices = [device]
     config.logger.wandb.mode = wandb_mode
+    config.logger.wandb.project = project
     
     if config.trainer.deterministic:
         print("Using deterministic mode")
