@@ -21,25 +21,24 @@ class MultiChannelGNNEncoder(nn.Module):
         self,
         latent_dim,
         num_layers=1,
-        activation="relu6",
+        activation="elu",
         dropout=0.0,
         norm=None,
-        lin_channel=False,
+        lin_channel=True,
         spatial_channel=True,
-        num_heads=1,
         spatial_channel_kwargs={},
-        mha_channel=False,
+        mha_channel=True,
         mha_channel_kwargs={},
         latent_channel=False,
         latent_channel_kwargs={},
-        fusion=None,
+        fusion="concat_skip",
         use_ffn=False,
         ff_hidden_dim=256,
         plain_last=False,
         norm_first=False,
         norm_last=False,
         init_embed_hidden_channels=[512, 256],
-        inter_skip=False,
+        inter_skip=True,
         use_pos=False,
         sim_pos_enc=False,
         use_id=False,
@@ -49,6 +48,13 @@ class MultiChannelGNNEncoder(nn.Module):
         super().__init__()
         if norm == "None":
             norm = None
+        # allow to set number of heads globally
+        if "num_heads" in kwargs:
+            if kwargs["num_heads"] is not None:
+                mha_channel_kwargs["num_heads"] = kwargs["num_heads"]
+                spatial_channel_kwargs["num_heads"] = kwargs["num_heads"]
+                latent_channel_kwargs["num_heads"] = kwargs["num_heads"]
+
         self.mlp = MLP(
             [-1, *init_embed_hidden_channels, latent_dim],
             norm=None,
@@ -66,7 +72,6 @@ class MultiChannelGNNEncoder(nn.Module):
                     norm=norm,
                     lin_channel=lin_channel,
                     spatial_channel=spatial_channel,
-                    num_heads=num_heads,
                     spatial_channel_kwargs=spatial_channel_kwargs,
                     mha_channel=mha_channel,
                     mha_channel_kwargs=mha_channel_kwargs,
@@ -94,6 +99,8 @@ class MultiChannelGNNEncoder(nn.Module):
         if use_id:
             self.id_encoder = nn.Linear(3, latent_dim)
         self.inter_skip = inter_skip
+        # print unused kwargs
+        print("Input kwargs:", kwargs)
 
     def forward(
         self,
@@ -148,18 +155,17 @@ class MultiChannelGNNBlock(nn.Module):
     def __init__(
         self,
         latent_dim,
-        activation="relu6",
+        activation="elu",
         dropout=0.0,
         norm=None,
-        lin_channel=False,
+        lin_channel=True,
         spatial_channel=True,
-        num_heads=1,
         spatial_channel_kwargs={},
-        mha_channel=False,
-        mha_channel_kwargs={},
         latent_channel=False,
         latent_channel_kwargs={},
-        fusion=None,
+        mha_channel=True,
+        mha_channel_kwargs={}, 
+        fusion="concat_skip",
         use_ffn=False,
         ff_hidden_dim=256,
         plain_last=False,
@@ -173,7 +179,7 @@ class MultiChannelGNNBlock(nn.Module):
         self.spatial_channel = None
         if spatial_channel:
             self.spatial_channel = GNNChannel(
-                latent_dim, heads=num_heads, **spatial_channel_kwargs
+                latent_dim, **spatial_channel_kwargs
             )
 
         self.lin_channel = None
@@ -191,7 +197,7 @@ class MultiChannelGNNBlock(nn.Module):
         self.mha_channel = None
         if mha_channel:
             self.mha_channel = MHAChannel(
-                latent_dim, num_heads=num_heads, **mha_channel_kwargs
+                latent_dim, **mha_channel_kwargs
             )
 
         # make sure some channel is selected
@@ -298,6 +304,11 @@ class GNNChannel(nn.Module):
         **conv_kwargs,
     ):
         super().__init__()
+        # replace num_heads in conv_kwargs with heads and set default value
+        if "num_heads" in conv_kwargs:
+            conv_kwargs["heads"] = conv_kwargs.pop("num_heads")
+        else:
+            conv_kwargs["heads"] = 8
         self.convs = nn.ModuleList()
         self.norms = nn.ModuleList()
         self.dropouts = nn.ModuleList()

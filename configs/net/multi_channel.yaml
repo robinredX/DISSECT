@@ -1,33 +1,44 @@
 _target_: src.models.dissect_spatial.DissectSpatial
-latent_dim: 128
-activation: "relu6"
+latent_dim: 256
+activation: "elu"
 use_pos: False
 use_id: False
 encoder_type: "gnn"
 encoder_kwargs:
   num_layers: 1
   dropout: 0.0
-  norm: "batch_norm"
-  lin_channel: false
+  norm: null
+  lin_channel: true
   spatial_channel: true
-  num_heads: 4
-  # spatial_conv_kwargs: {}
-  mha_channel: true
+  spatial_channel_kwargs:
+    norm: null
+    num_heads: 8
+    activation: null
+    num_layers: 1
+  mha_channel: True
+  mha_channel_kwargs:
+    norm: null
+    num_heads: 8
+    activation: null
+    num_layers: 1
   latent_channel: false
-  knn: 6
-  cosine: false
-  # latent_conv_kwargs: {}
-  fusion: "concat"
-  use_ffn: true
+  latent_channel_kwargs:
+    norm: null
+    num_heads: 8
+    activation: null
+    num_layers: 1
+  fusion: "concat_skip"
+  use_ffn: false
   ff_hidden_dim: 256
   plain_last: false
   init_embed_hidden_channels: [512, 256]
   inter_skip: true
   norm_first: false
-  use_pos: True
+  use_pos: False
   sim_pos_enc: False
   use_id: False
   use_sparse: True
 decoder_kwargs:
   num_layers: 2
   hidden_channels: 64
+  norm: null
