@@ -152,9 +152,15 @@ class DeconvolutionModel(pl.LightningModule):
         # should be done in a callback
         if self.beta is None:
             beta = beta_scheduler(self.global_step, max_steps=5000)
-            # beta = beta_scheduler_v2(
-            #     self.global_step, pre_maxsteps=1000, slope=0.01, max_val=20
-            # )
+        elif type(self.beta) == str:
+            if self.beta == "v2":
+                beta = beta_scheduler_v2(
+                    self.global_step, pre_maxsteps=1000, slope=0.01, max_val=20
+                )
+            elif self.beta == "v3":
+                beta = beta_scheduler_v3(self.global_step, step_size=1000, step_growth=7.5)
+            else:
+                raise ValueError(f"beta {self.beta} not implemented")
         else:
             beta = self.beta
 
@@ -320,6 +326,10 @@ def beta_scheduler_v2(step, pre_maxsteps=1000, slope=0.01, max_val=25):
         return 0.0
     else:
         return min(max_val, slope * (step - pre_maxsteps))
+
+
+def beta_scheduler_v3(step, step_size=1000, step_growth=7.5):
+    return step_growth * (step // step_size)
 
 
 def buffer_plot_and_get(fig):
