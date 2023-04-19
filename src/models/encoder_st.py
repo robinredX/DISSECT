@@ -301,6 +301,7 @@ class GNNChannel(nn.Module):
         norm=None,
         dropout=0.0,
         residuals=False,
+        back_to_latent=False,
         **conv_kwargs,
     ):
         super().__init__()
@@ -313,6 +314,7 @@ class GNNChannel(nn.Module):
         self.norms = nn.ModuleList()
         self.dropouts = nn.ModuleList()
         self.activations = nn.ModuleList()
+        self.concat_linears = nn.ModuleList()
         for i in range(num_layers):
             self.convs.append(
                 GATv2Conv(
@@ -326,13 +328,21 @@ class GNNChannel(nn.Module):
             self.norms.append(normalization_resolver(norm, in_channels=latent_dim))
             self.dropouts.append(nn.Dropout(dropout))
             self.activations.append(activation_resolver(activation))
+            if num_layers == 1 and not back_to_latent:
+                self.concat_linears.append(None)
+            elif i == num_layers - 1 and not back_to_latent:
+                self.concat_linears.append(None)
+            else:
+                self.concat_linears.append(nn.LazyLinear(latent_dim))
         self.residuals = residuals
 
     def forward(self, x, edge_index, edge_attr=None):
-        for conv, norm, act, dropout in zip(
-            self.convs, self.norms, self.activations, self.dropouts
+        for conv, lin, norm, act, dropout in zip(
+            self.convs, self.concat_linears, self.norms, self.activations, self.dropouts
         ):
             x = conv(x, edge_index, edge_attr=edge_attr)
+            if lin is not None:
+                x = lin(x)
             if norm is not None:
                 x = norm(x)
             if act is not None:
