@@ -23,14 +23,14 @@ def get_run_config(run_name, entity="dschaub", project="DISSECT-src"):
         return None
 
 
-def get_result_for_run_name(run_name, entity="dschaub", project="dissect-spatial", verbose=0):
+def get_result_for_run_name(run_name, entity="dschaub", project="dissect-spatial", verbose=0, **kwargs):
     if verbose:
         print("Loading", run_name)
     run = get_run_for_name(run_name, entity=entity, project=project)
-    return get_result_for_run(run, verbose=verbose)
+    return get_result_for_run(run, verbose=verbose, **kwargs)
 
 
-def get_result_for_run(run, verbose=0):
+def get_result_for_run(run, verbose=0, identifier="step5000"):
     try:
         # filter file
         result_files = [
@@ -47,7 +47,7 @@ def get_result_for_run(run, verbose=0):
     except:
         print("No result file found looking for artifacts instead")
         # TODO
-        artifacts = [art for art in run.logged_artifacts() if "step5000" in art.name]
+        artifacts = [art for art in run.logged_artifacts() if identifier in art.name]
         assert len(artifacts) == 1
         name = artifacts[0].file().split("/")[-1]
         base_path = "./wandb/artifacts"
@@ -60,9 +60,12 @@ def get_result_for_run(run, verbose=0):
     with open(path, "r") as f:
         result = json.load(f)
     # os.remove(f"{path}")
-    result_df = pd.DataFrame(result["data"], columns=result["columns"]).set_index(
-        "sample_names"
-    )
+    try:
+        result_df = pd.DataFrame(result["data"], columns=result["columns"]).set_index(
+            "sample_names"
+        )
+    except:
+        result_df = pd.DataFrame(result["data"], columns=result["columns"])
     # delete file
     return result_df
 
@@ -103,3 +106,17 @@ def extract_metrics_from_runs(runs, max_runs=1e5):
         if t == max_runs:
             break
     return run_names, mean_cccs, mean_rmses
+
+
+def get_runs_for_tags_and_filters(baseline_tag, extra_tags, run_filter, project="multi-channel-gnn"):
+    runs = []
+    # load baseline:
+    filter_ = {"tags": {"$in": [baseline_tag]}, "state": "finished"}
+    runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
+    runs.extend(runs_per_tag)
+    for tag in extra_tags:
+        filter_ = {"tags": {"$in": [tag]}, "state": "finished", **run_filter}
+        runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
+        runs.extend(runs_per_tag)
+    print(f"Loaded {len(runs)} runs")
+    return runs
