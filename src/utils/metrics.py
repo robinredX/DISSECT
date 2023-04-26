@@ -2,11 +2,48 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import distance
 
+def harmonize_dfs(df_true, df_pred, verbose=0, drop_nans=True):
+    # make sure the columns are the same
+    # get overlapping columns
+    true_col_set = set(df_true.columns)
+    pred_col_set = set(df_pred.columns)
+    if not true_col_set == pred_col_set:
+        overlaping_cols = list(set(true_col_set).intersection(set(pred_col_set)))
+        if verbose > 0:
+            print(f"Number of columns in true: {len(true_col_set)}")
+            print(f"Number of columns in pred: {len(pred_col_set)}")
+            print(f"Number of overlapping columns: {len(overlaping_cols)}")
+            print(f"Overlapping columns: {overlaping_cols}")
+            print(f"Non-overlapping columns in true: {true_col_set - pred_col_set}")
+            print(f"Non-overlapping columns in pred: {pred_col_set - true_col_set}")
+        df_true_reduced = df_true[overlaping_cols].copy()
+        df_pred_reduced = df_pred[overlaping_cols].copy()
+        # renormalize each row
+        df_true_reduced = df_true_reduced.div(df_true_reduced.sum(axis=1), axis=0)
+        df_pred_reduced = df_pred_reduced.div(df_pred_reduced.sum(axis=1), axis=0)
+        if drop_nans:
+            # get rows with nans in either one df
+            nan_rows_true = df_true_reduced.isna().any(axis=1)
+            nan_rows_pred = df_pred_reduced.isna().any(axis=1)
+            nan_rows = nan_rows_true | nan_rows_pred
+            # drop nan rows
+            df_true_reduced = df_true_reduced[~nan_rows]
+            df_pred_reduced = df_pred_reduced[~nan_rows]
+        else:
+            # replace all nan values with zeros
+            df_true_reduced = df_true_reduced.fillna(0)
+            df_pred_reduced = df_pred_reduced.fillna(0)
+        return df_true_reduced, df_pred_reduced
+    else:
+        return df_true[df_pred.columns], df_pred
+
+
 def calc_jsd(y_true, y_pred):
     # y_true.shape = (n_samples, n_celltypes)
     # y_pred.shape = (n_samples, n_celltypes)
     jsds = np.square(distance.jensenshannon(y_true, y_pred, axis=1))
     return jsds
+
 
 def calc_jsd_df(df_true, df_pred, verbose=0, exclude_cols=None):
     if exclude_cols is not None:
@@ -23,6 +60,7 @@ def calc_jsd_df(df_true, df_pred, verbose=0, exclude_cols=None):
         print(f"Mean JSD: {mean_jsd}")
 
     return mean_jsd, jsds
+
 
 def ccc_fn(y_true, y_pred):
     # y_true.shape = (1, n_celltypes)
@@ -50,7 +88,7 @@ def calc_ccc(y_true, y_pred, samplewise=False):
     cccs = [ccc_fn(y_true_i, y_pred_i) for y_true_i, y_pred_i in zip(y_true, y_pred)]
     return cccs
 
-
+# TODO rename function and harmonize code (calc_mean_ccc_df) same for function above
 def calc_ccc_df(df_true, df_pred, samplewise=False, verbose=0, exclude_cols=None):
     if exclude_cols is not None:
         df_true = df_true.drop(exclude_cols, axis=1)

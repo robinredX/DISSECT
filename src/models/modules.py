@@ -14,7 +14,15 @@ from torch_geometric.data import Data, Batch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 
-from src.utils.metrics import calc_mean_corr, calc_mean_rmse, calc_ccc
+from src.utils.metrics import (
+    calc_mean_corr,
+    calc_mean_rmse,
+    calc_ccc,
+    calc_mean_corr_df,
+    calc_mean_rmse_df,
+    calc_ccc_df,
+    harmonize_dfs,
+)
 
 
 class DeconvolutionModel(pl.LightningModule):
@@ -94,6 +102,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.datamodule = self.trainer.datamodule
         self.celltype_names = self.datamodule.celltype_names
         self.sample_names = self.datamodule.sample_names
+        self.real_celltypes = self.datamodule.y_real_celltypes
         self.st_data = self.datamodule.st_data
         if self.move_data_to_device:
             self.datamodule.move_to_device(self.device)
@@ -150,7 +159,7 @@ class DeconvolutionModel(pl.LightningModule):
 
         # change loss function based on global step
         # should be done in a callback
-        if self.beta is None:
+        if self.beta is None or self.beta == "v1":
             beta = beta_scheduler(self.global_step, max_steps=5000)
         elif type(self.beta) == str:
             if self.beta == "v2":
@@ -158,7 +167,9 @@ class DeconvolutionModel(pl.LightningModule):
                     self.global_step, pre_maxsteps=1000, slope=0.01, max_val=20
                 )
             elif self.beta == "v3":
-                beta = beta_scheduler_v3(self.global_step, step_size=1000, step_growth=7.5)
+                beta = beta_scheduler_v3(
+                    self.global_step, step_size=1000, step_growth=7.5
+                )
             else:
                 raise ValueError(f"beta {self.beta} not implemented")
         else:
@@ -201,14 +212,25 @@ class DeconvolutionModel(pl.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         # TODO put into callback
         data = val_batch[0]
+
+        # obtain predictions
         y_hat = F.softmax(self(data), dim=-1).cpu().detach().numpy()
+        y_hat_df = pd.DataFrame(y_hat)
+        # assign reference celltype names
+        y_hat_df.columns = self.celltype_names
+
         y = data.y
 
         # check if we have ground truth
         if y is not None:
-            mean_rmse, mean_corr, mean_ccc = compare_with_gt(
-                y_hat, y.cpu().detach().numpy()
-            )
+            y = y.cpu().detach().numpy()
+            y_df = pd.DataFrame(y)
+            if self.real_celltypes is not None:
+                y_df.columns = self.real_celltypes
+                mean_rmse, mean_corr, mean_ccc = compare_with_gt_df(y_hat_df, y_df)
+            else:
+                mean_rmse, mean_corr, mean_ccc = compare_with_gt(y_hat, y)
+            
             self.log("validation/mean_rmse", mean_rmse)
             self.log("validation/mean_corr", mean_corr)
             self.log("validation/mean_ccc", mean_ccc)
@@ -218,9 +240,6 @@ class DeconvolutionModel(pl.LightningModule):
 
         if self.save_predictions:
             print("Saving predictions...")
-            y_hat_df = pd.DataFrame(y_hat)
-            if self.celltype_names is not None:
-                y_hat_df.columns = self.celltype_names
             if self.sample_names is not None:
                 y_hat_df["sample_names"] = self.sample_names
             self.logger.log_table(
@@ -257,6 +276,16 @@ def compare_with_gt(y_hat, y):
     mean_rmse = calc_mean_rmse(y_hat, y)[0]
     mean_corr = calc_mean_corr(y_hat, y)[0]
     mean_ccc = np.mean(calc_ccc(y, y_hat, samplewise=False))
+    return mean_rmse, mean_corr, mean_ccc
+
+
+def compare_with_gt_df(y_hat_df, y_df, verbose=0):
+    # average rmse cell type wise
+    # first harmonize dfs
+    y_df, y_hat_df = harmonize_dfs(y_df, y_hat_df, verbose=verbose)
+    mean_rmse = calc_mean_rmse_df(y_df, y_hat_df, verbose=0, samplewise=False)[0]
+    mean_corr = calc_mean_corr_df(y_df, y_hat_df, verbose=0)[0]
+    mean_ccc = calc_ccc_df(y_df, y_hat_df, samplewise=False)[0]
     return mean_rmse, mean_corr, mean_ccc
 
 
