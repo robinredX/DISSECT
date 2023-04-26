@@ -20,7 +20,7 @@ class SpatialDataModule(LightningDataModule):
         self,
         st_path: str,
         reference_dir: str,
-        radius: float = 0.035,
+        radius: float = 0.02,
         p: float = 0.0,
         num_samples: int = 32,
         train_batch_size: int = 1,
@@ -38,11 +38,15 @@ class SpatialDataModule(LightningDataModule):
         self.X_real, self.X_real_train, self.X_sim, self.y_sim = load_prepared_data(
             self.hparams.reference_dir
         )
-        # ground truth only available for slideseq data
-        if "slide" in self.hparams.st_path or "FISH" in self.hparams.st_path:
-            self.y_real = self.st_data.obs[self.st_data.obs.columns[2::]].to_numpy()
+        # ground truth only available for slideseq, seqfish, merfish, starmap data
+        techniques = ["slide", "FISH", "star"]
+        if any([tech in self.hparams.st_path for tech in techniques]):
+            self.y_real_celltypes = list(self.st_data.obs.columns[2::])
+            self.y_real = self.st_data.obs[self.y_real_celltypes].to_numpy()
         else:
+            self.y_real_celltypes = None
             self.y_real = None
+            
 
         self.celltype_names = load_celltypes(f"{reference_dir}/datasets/celltypes.txt")
 
