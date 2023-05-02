@@ -108,15 +108,22 @@ def extract_metrics_from_runs(runs, max_runs=1e5):
     return run_names, mean_cccs, mean_rmses
 
 
-def get_runs_for_tags_and_filters(baseline_tag, extra_tags, run_filter, project="multi-channel-gnn"):
+def get_runs_for_tags_and_filters(baseline_tag, extra_tags=None, run_filter=None, project="multi-channel-gnn"):
+    if not isinstance(baseline_tag, list):
+        baseline_tag = [baseline_tag]
+    if extra_tags is not None and not isinstance(extra_tags, list):
+        extra_tags = [extra_tags]
     runs = []
     # load baseline:
-    filter_ = {"tags": {"$in": [baseline_tag]}, "state": "finished"}
+    filter_ = {"tags": {"$in": baseline_tag}, "state": "finished"}
     runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
     runs.extend(runs_per_tag)
-    for tag in extra_tags:
-        filter_ = {"tags": {"$in": [tag]}, "state": "finished", **run_filter}
-        runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
-        runs.extend(runs_per_tag)
+    if extra_tags is not None:
+        if run_filter is None:
+            run_filter = {}
+        for tag in extra_tags:
+            filter_ = {"tags": {"$in": [tag]}, "state": "finished", **run_filter}
+            runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
+            runs.extend(runs_per_tag)
     print(f"Loaded {len(runs)} runs")
     return runs
