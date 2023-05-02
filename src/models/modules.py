@@ -106,8 +106,6 @@ class DeconvolutionModel(pl.LightningModule):
         self.st_data = self.datamodule.st_data
         if self.move_data_to_device:
             self.datamodule.move_to_device(self.device)
-        else:
-            pass
         wandb.define_metric(
             "validation/mean_corr", summary="max", step_metric="trainer/global_step"
         )
