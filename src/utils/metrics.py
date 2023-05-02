@@ -5,6 +5,10 @@ from scipy.spatial import distance
 def harmonize_dfs(df_true, df_pred, verbose=0, drop_nans=True):
     # make sure the columns are the same
     # get overlapping columns
+    assert set(df_pred.index) == set(df_true.index), "Indices are not the same"
+    # reindex
+    df_pred = df_pred.reindex(df_true.index)
+    # get column sets
     true_col_set = set(df_true.columns)
     pred_col_set = set(df_pred.columns)
     if not true_col_set == pred_col_set:
@@ -27,8 +31,8 @@ def harmonize_dfs(df_true, df_pred, verbose=0, drop_nans=True):
             nan_rows_pred = df_pred_reduced.isna().any(axis=1)
             nan_rows = nan_rows_true | nan_rows_pred
             # drop nan rows
-            df_true_reduced = df_true_reduced[~nan_rows]
-            df_pred_reduced = df_pred_reduced[~nan_rows]
+            df_true_reduced = df_true_reduced.loc[~nan_rows]
+            df_pred_reduced = df_pred_reduced.loc[~nan_rows]
         else:
             # replace all nan values with zeros
             df_true_reduced = df_true_reduced.fillna(0)
@@ -176,9 +180,9 @@ def calc_mean_rmse_df(df_1, df_2, verbose=2, exclude_cols=None, samplewise=False
 
 
 
-def calc_metrics_df(df_true, df_pred, verbose=1, exclude_cols=None, samplewise=False):
-    
-    
+def calc_metrics_df(df_true, df_pred, verbose=1, exclude_cols=None, samplewise=False, harmonize=True):
+    if harmonize:
+        df_true, df_pred = harmonize_dfs(df_true, df_pred)
     mean_corr, corrs = calc_mean_corr_df(
         df_true, df_pred, verbose=verbose, exclude_cols=exclude_cols, transpose=not samplewise
     )
