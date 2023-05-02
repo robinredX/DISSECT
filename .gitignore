@@ -26,3 +26,5 @@ figures/
 **/media
 **/__pycache__
 
+notebooks/experiment_tf.ipynb
+notebooks/experiment_torch.ipynb
