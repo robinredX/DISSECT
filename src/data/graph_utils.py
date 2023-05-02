@@ -14,14 +14,63 @@ def normalize_coords(coords):
     return np.float32(coords)
 
 
-def construct_spatial_graph(coords, radius=0.02):
+def construct_knn_graph(dist_mat, k=6):
+    """Construct a k-nearest neighbors graph from distance matrix."""
+    # get k nearest neighbors
+    knn = np.argsort(dist_mat, axis=1)[:, 0 : k + 1]
+    # build adjacency matrix
+    adj_mat = np.zeros_like(dist_mat)
+    for i in range(dist_mat.shape[0]):
+        adj_mat[i, knn[i]] = 1
+    # ensure the matrix is symmetric
+    adj_mat = (adj_mat + adj_mat.T).clip(0, 1)
+    return adj_mat
+
+
+def construct_layer_graph(dist_mat, num_layers=1):
+    """Connect each node to its nearest neighbors of num layers order"""
+    adj_mat = np.zeros_like(dist_mat)
+    for i in range(dist_mat.shape[0]):
+        # order distances by ascending order
+        # get all indieces with same distance as nearest one and so on
+        dist_set = np.unique(dist_mat[i])
+        # order distances
+        dist_set = np.sort(dist_set)
+        for dist in dist_set[0 : num_layers + 1]:
+            # get all indices with same distance
+            indices = np.where(dist_mat[i] == dist)[0]
+            # add edges to all indices
+            adj_mat[i, indices] = 1
+
+    # ensure the matrix is symmetric
+    adj_mat = (adj_mat + adj_mat.T).clip(0, 1)
+    return adj_mat
+
+def construct_spatial_graph(
+    coords, radius=0.02, knn=None, num_hops=None, num_layers=None, nn_scale=0.015, threshold=0.02
+):
     """Construct a spatial graph from coordinates and radius."""
     coords = normalize_coords(coords)
     dist_mat = distance_matrix(coords, coords)
+    # adjust graph scale
+    mean_nn_dist = np.mean(np.sort(dist_mat, axis=1)[:, 1])
+    if mean_nn_dist > threshold:
+        alpha = nn_scale / mean_nn_dist
+        coords = coords * alpha
+        dist_mat = distance_matrix(coords, coords)
+
     # calculate adjacency matrix
-    adj_mat = np.zeros_like(dist_mat)
-    # set threshold such that each spot has maximum 6 neighbors for Visium data
-    adj_mat[dist_mat < radius] = 1
+    if knn is not None:
+        # connect each spot to its k nearest neighbors
+        adj_mat = construct_knn_graph(dist_mat, k=knn)
+    elif num_hops is not None:
+        pass
+    elif num_layers is not None:
+        adj_mat = construct_layer_graph(dist_mat, num_layers)
+    else:
+        adj_mat = np.zeros_like(dist_mat)
+        # set threshold such that each spot has maximum 6 neighbors for Visium data
+        adj_mat[dist_mat < radius] = 1
     return np.float32(coords), np.float32(dist_mat), np.float32(adj_mat)
 
 
@@ -94,20 +143,24 @@ def sample_k_hop_subgraph(graph, k=5):
     return subgraph
 
 
-def check_radius(raw_coords, radius=0.02, num_hops=1):
+def check_graph_construction(raw_coords, num_hops=1, draw=True, verbose=True, **kwargs):
     coords = normalize_coords(raw_coords)
-    graph = construct_networkx_graph(*construct_spatial_graph(coords, radius=radius))
-    print(f"Radius: {radius}")
-    print(f"Number of nodes: {graph.number_of_nodes()}")
-    print(f"Number of edges: {graph.number_of_edges()}")
-    # print average degree
+    graph = construct_networkx_graph(*construct_spatial_graph(coords, **kwargs))
     avg_degree = np.mean([d for n, d in graph.degree()])
-    print(f"Average degree: {avg_degree}")
+    if verbose:
+        print(f"Graph args: {kwargs}")
+        print(f"Number of nodes: {graph.number_of_nodes()}")
+        print(f"Number of edges: {graph.number_of_edges()}")
+        # print average degree
+        print(f"Average degree: {avg_degree}")
     # avg_shortest_path = nx.average_shortest_path_length(graph)
     # print(f"Average shortest path length: {avg_shortest_path}")
-    subgraph = sample_k_hop_subgraph(graph, num_hops)
-    nx.draw(subgraph, pos=nx.get_node_attributes(subgraph, "pos"), node_size=10)
-    plt.show()
+    if draw:
+        subgraph = sample_k_hop_subgraph(graph, num_hops)
+        nx.draw(subgraph, pos=nx.get_node_attributes(subgraph, "pos"), node_size=10)
+        plt.show()
+    return avg_degree, graph
+
 
 def split_graph(graph, num_nodes=64):
     # produce a list of graphs with num_nodes nodes
