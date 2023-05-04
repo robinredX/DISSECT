@@ -41,3 +41,9 @@ def load_celltypes(path):
         cell_type_list = f.readlines()
     cell_type_list = [x.strip() for x in cell_type_list][1::]
     return cell_type_list
+
+def load_gene_names(path):
+    with open(path, "r") as f:
+        gene_list = f.readlines()
+    gene_list = [x.strip() for x in gene_list][1::]
+    return gene_list
