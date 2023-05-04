@@ -30,16 +30,21 @@ def get_result_for_run_name(run_name, entity="dschaub", project="dissect-spatial
     return get_result_for_run(run, verbose=verbose, **kwargs)
 
 
-def get_result_for_run(run, verbose=0, identifier="step5000"):
+def get_result_for_run(run, verbose=0, identifier="step5000", step=None):
     try:
         # filter file
-        result_files = [
-            file for file in run.files() if "table" in file.name and "step-" in file.name
-        ]
-        # order files by step num
-        result_file = sorted(
-            result_files, key=lambda x: int(x.name.split("-")[-1].split("_")[0])
-        )[-1]
+        if step is None:
+            result_files = [
+                file for file in run.files() if "table" in file.name and "step-" in file.name
+            ]
+            # order files by step num
+            result_file = sorted(
+                result_files, key=lambda x: int(x.name.split("-")[-1].split("_")[0])
+            )[-1]
+        else:
+            result_file = [
+                file for file in run.files() if "table" in file.name and f"step-{step}_" in file.name
+            ][0]
         # load file in memory and convert to df
         path = result_file.download(replace=False, exist_ok=True).name
         name = result_file.name
@@ -113,14 +118,14 @@ def get_runs_for_tags_and_filters(baseline_tag, extra_tags=None, run_filter=None
         baseline_tag = [baseline_tag]
     if extra_tags is not None and not isinstance(extra_tags, list):
         extra_tags = [extra_tags]
+    if run_filter is None:
+        run_filter = {}
     runs = []
     # load baseline:
     filter_ = {"tags": {"$in": baseline_tag}, "state": "finished"}
     runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
     runs.extend(runs_per_tag)
     if extra_tags is not None:
-        if run_filter is None:
-            run_filter = {}
         for tag in extra_tags:
             filter_ = {"tags": {"$in": [tag]}, "state": "finished", **run_filter}
             runs_per_tag = list(get_filtered_runs(filter=filter_, project=project))
