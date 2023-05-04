@@ -5,6 +5,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import ConcatDataset, Dataset
 from torch_geometric.loader import DataLoader
 import scanpy as sc
+import pandas as pd
 
 from src.data.datasets import get_spatial_train_and_test_set
 from src.data.utils import (
@@ -12,6 +13,7 @@ from src.data.utils import (
     load_spatial_data,
     load_celltypes,
     load_sample_names,
+    load_gene_names,
 )
 
 
@@ -28,6 +30,9 @@ class SpatialDataModule(LightningDataModule):
         num_workers: int = 0,
         pin_memory: bool = True,
         log_hparams: bool = True,
+        use_rctd_genes: bool = False,
+        with_platform_effects: bool = True,
+        renormalize: bool = False,
     ) -> None:
         super().__init__()
         # this line allows to access init params with 'self.hparams' attribute
@@ -46,7 +51,6 @@ class SpatialDataModule(LightningDataModule):
         else:
             self.y_real_celltypes = None
             self.y_real = None
-            
 
         self.celltype_names = load_celltypes(f"{reference_dir}/datasets/celltypes.txt")
 
@@ -55,8 +59,12 @@ class SpatialDataModule(LightningDataModule):
             f"{reference_dir}/datasets/sample_names.txt"
         )
 
+        self.gene_names = load_gene_names(f"{reference_dir}/datasets/genes.txt")
+
         self.train_data: Optional[Dataset] = None
         self.val_data: Optional[Dataset] = None
+
+        self.postprocess()
 
     @property
     def num_celltypes(self) -> int:
@@ -69,6 +77,44 @@ class SpatialDataModule(LightningDataModule):
     @property
     def num_genes(self) -> int:
         return self.X_real.shape[1]
+
+    def postprocess(self) -> None:
+        # select rctd genes if available
+        base_index = self.hparams.st_path.rfind("data")
+        base_path = self.hparams.st_path[0:base_index - 1]
+        if self.hparams.use_rctd_genes:
+            if not self.hparams.with_platform_effects:
+                rctd_gene_path = f"{base_path}/data/extras/rctd_genelists/de_genes_no_platformEffect.csv"
+            elif "-2a" in self.hparams.reference_dir:
+                rctd_gene_path = f"{base_path}/data/extras/rctd_genelists/de_genes_UMOD-WT.WT-2a_resolution75.csv"
+               
+            elif "-4b" in self.hparams.reference_dir or "v2_105" in self.hparams.reference_dir:
+                rctd_gene_path = f"{base_path}/data/extras/rctd_genelists/de_genes_UMOD-KI.KI-4b_resolution105.csv"
+            else:
+                rctd_gene_path = None
+
+            if rctd_gene_path is not None:
+                rctd_gene_names = pd.read_csv(rctd_gene_path)["Gene"].to_list()
+                # intersect genes with rctd genes
+                gene_intersection = list(
+                    set(self.gene_names).intersection(set(rctd_gene_names))
+                )
+                X_real_df = pd.DataFrame(self.X_real, columns=self.gene_names)
+                X_sim_df = pd.DataFrame(self.X_sim, columns=self.gene_names)
+
+                self.X_real = X_real_df[gene_intersection].to_numpy()
+                self.X_sim = X_sim_df[gene_intersection].to_numpy()
+
+                print(
+                    f"Using {len(gene_intersection)} rctd genes instead of {len(self.gene_names)} original genes for training."
+                )
+
+                self.gene_names = gene_intersection
+
+                # potentially perform renormalization
+                if self.hparams.renormalize:
+                    # normalize to counts per million
+                    pass
 
     def prepare_data(self) -> None:
         # potentially run data dissect data preparation here
