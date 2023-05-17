@@ -43,6 +43,7 @@ class DeconvolutionModel(pl.LightningModule):
         plotting=True,
         save_predictions=True,
         log_hparams=True,
+        combine_graphs=False,
     ):
         super().__init__()
 
@@ -61,6 +62,7 @@ class DeconvolutionModel(pl.LightningModule):
         self.alpha_max = alpha_max
         self.normalize = normalize
         self.g_mix_from_g_real = g_mix_from_g_real
+        self.combine_graphs = combine_graphs
         self.move_data_to_device = move_data_to_device
         self.exchange_weights = False
         self.plotting = plotting
@@ -124,6 +126,7 @@ class DeconvolutionModel(pl.LightningModule):
         wandb.define_metric(
             "validation/mean_ccc_", hidden=True, step_metric="trainer/global_step"
         )
+        self.y_hat_real = None
 
     # by default runs the forward method
     def predict_step(self, batch, idx):
@@ -131,29 +134,44 @@ class DeconvolutionModel(pl.LightningModule):
         return F.softmax(self(batch[0]), dim=-1)
 
     def training_step(self, train_batch, batch_idx):
-        g_real, g_sim = train_batch
+        g_real_batch, g_sim_batch = train_batch
 
         # create mixture graph on the fly
         # maybe increase amount of real data over time per node
         alpha = alpha_scheduler(self.global_step, self.alpha_min, self.alpha_max)
 
         # TODO refine mixture graph definition
-        if self.g_mix_from_g_real:
-            base_graph = g_real
-        else:
-            base_graph = g_sim
-        g_mix = Data(
-            x=alpha * g_real.x + (1 - alpha) * g_sim.x,
-            edge_index=base_graph.edge_index,
-            edge_weight=base_graph.edge_weight,
-            edge_attr=base_graph.edge_attr,
-            pos=base_graph.pos,
-            batch=base_graph.batch,
-            id=torch.roll(g_sim.id, 1, 1),
+        g_mix_batch = construct_mixture_graph_batch(
+            self.g_mix_from_g_real, g_real_batch, g_sim_batch, alpha
         )
 
         # simulated ground truth celltype abundances
-        y_sim = g_sim.y
+        y_sim = g_sim_batch.y
+
+        # forward passes
+        if not self.combine_graphs:
+            # three separate forward passes
+            y_hat_real = self(g_real_batch)
+            y_hat_sim = self(g_sim_batch)
+            y_hat_mix = self(g_mix_batch)
+        else:
+            # do everything in one forward pass and allow message passing between different graphs
+            combined_g_batch = combine_graphs(g_real_batch, g_sim_batch, g_mix_batch)
+            y_hat_combined = self(combined_g_batch)
+
+            assert combined_g_batch.num_nodes % 3 == 0
+            num_nodes_single = int(combined_g_batch.num_nodes / 3)
+
+            y_hat_real = y_hat_combined[0:num_nodes_single]
+            y_hat_sim = y_hat_combined[num_nodes_single:2 * num_nodes_single]
+            y_hat_mix = y_hat_combined[2 * num_nodes_single : :]
+            
+            # save latest predicitions for use in validation step
+            self.y_hat_real = y_hat_real.detach()
+
+        sim_loss, mix_loss = calc_loss(
+            y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn
+        )
 
         # change loss function based on global step
         # should be done in a callback
@@ -173,15 +191,7 @@ class DeconvolutionModel(pl.LightningModule):
         else:
             beta = self.beta
 
-        # forward passes
-        y_hat_sim = self(g_sim)
-        y_hat_real = self(g_real)
-        y_hat_mix = self(g_mix)
-
-        sim_loss, mix_loss = calc_loss(
-            y_sim, y_hat_sim, y_hat_real, y_hat_mix, alpha, sim_loss_fn=self.sim_loss_fn
-        )
-
+        # only relevant if encoder networks are different
         if beta > 0 and self.exchange_weights:
             self.net.exchange_weights()
             self.exchange_weights = False
@@ -212,7 +222,14 @@ class DeconvolutionModel(pl.LightningModule):
         data = val_batch[0]
 
         # obtain predictions
-        y_hat = F.softmax(self(data), dim=-1).cpu().detach().numpy()
+        if not self.combine_graphs:
+            y_hat = F.softmax(self(data), dim=-1).cpu().detach().numpy()
+        else:
+            # for combined graph training use the latest predictions from the training step
+            if self.y_hat_real is None:
+                y_hat = F.softmax(self(data), dim=-1).cpu().detach().numpy()
+            else:
+                y_hat = F.softmax(self.y_hat_real, dim=-1).cpu().detach().numpy()
         y_hat_df = pd.DataFrame(y_hat)
         # assign reference celltype names
         y_hat_df.columns = self.celltype_names
@@ -228,7 +245,7 @@ class DeconvolutionModel(pl.LightningModule):
                 mean_rmse, mean_corr, mean_ccc = compare_with_gt_df(y_hat_df, y_df)
             else:
                 mean_rmse, mean_corr, mean_ccc = compare_with_gt(y_hat, y)
-            
+
             self.log("validation/mean_rmse", mean_rmse)
             self.log("validation/mean_corr", mean_corr)
             self.log("validation/mean_ccc", mean_ccc)
@@ -266,6 +283,68 @@ class DeconvolutionModel(pl.LightningModule):
             del self.st_data.uns["celltype_colors"]
 
         return y_hat
+
+
+def construct_mixture_graph_batch(g_mix_from_g_real, g_real_batch, g_sim_batch, alpha):
+    g_mix_data_list = []
+    for g_real, g_sim in zip(g_real_batch.to_data_list(), g_sim_batch.to_data_list()):
+        g_mix = construct_mixture_graph_single(g_mix_from_g_real, g_real, g_sim, alpha)
+        g_mix_data_list.append(g_mix)
+    g_mix_batch = Batch.from_data_list(g_mix_data_list)
+    return g_mix_batch
+
+
+def construct_mixture_graph_single(g_mix_from_g_real, g_real, g_sim, alpha):
+    if g_mix_from_g_real:
+        base_graph = g_real
+    else:
+        base_graph = g_sim
+    g_mix = Data(
+        x=alpha * g_real.x + (1 - alpha) * g_sim.x,
+        edge_index=base_graph.edge_index,
+        edge_weight=base_graph.edge_weight,
+        edge_attr=base_graph.edge_attr,
+        pos=base_graph.pos,
+        id=torch.roll(g_sim.id, 1, 1),
+    )
+    return g_mix
+
+
+def combine_graphs(g_real_batch, g_sim_batch, g_mix_batch):
+    combined_data_list = []
+    for g_real, g_sim, g_mix in zip(
+        g_real_batch.to_data_list(),
+        g_sim_batch.to_data_list(),
+        g_mix_batch.to_data_list(),
+    ):
+        combined_edge_index = torch.cat(
+            [
+                g_real.edge_index,
+                g_sim.edge_index + g_real.num_nodes,
+                g_mix.edge_index + 2 * g_real.num_nodes,
+            ],
+            dim=-1,
+        )
+        combined_x = torch.cat([g_real.x, g_sim.x, g_mix.x], dim=0)
+        combined_pos = torch.cat([g_real.pos, g_sim.pos, g_mix.pos], dim=0)
+        combined_edge_weight = torch.cat(
+            [g_real.edge_weight, g_sim.edge_weight, g_mix.edge_weight], dim=0
+        )
+        combined_edge_attr = torch.cat(
+            [g_real.edge_attr, g_sim.edge_attr, g_mix.edge_attr], dim=0
+        )
+        combined_id = torch.cat([g_real.id, g_sim.id, g_mix.id], dim=0)
+        combined_g = Data(
+            x=combined_x,
+            edge_index=combined_edge_index,
+            edge_weight=combined_edge_weight,
+            edge_attr=combined_edge_attr,
+            pos=combined_pos,
+            id=combined_id,
+        )
+        combined_data_list.append(combined_g)
+    combined_g_batch = Batch.from_data_list(combined_data_list)
+    return combined_g_batch
 
 
 def compare_with_gt(y_hat, y):
