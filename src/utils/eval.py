@@ -122,19 +122,26 @@ def extract_dataset_name(string, dataset_map):
         if value in string:
             saved_keys.append(key)
             saved_values.append(value)
-    
+
     assert len(saved_keys) > 0, print(f"Could not find dataset name in {string}")
     # select key with longest value
     key = saved_keys[np.argmax([len(value) for value in saved_values])]
     return key
 
-def get_dataset_name_for_run(run, dataset_map, dataset_path_map, st_ident="st_path", sc_ident="sc_path"):
+
+def get_dataset_name_for_run(
+    run, dataset_map, dataset_path_map, st_ident="st_path", sc_ident="sc_path"
+):
     orig_sc_string = run.config[sc_ident]
     orig_st_string = run.config[st_ident]
     # first check st path and select all suitable dataset names
-    closest_matches_st = difflib.get_close_matches(orig_st_string, dataset_path_map.values())
+    closest_matches_st = difflib.get_close_matches(
+        orig_st_string, dataset_path_map.values()
+    )
     # get corresponding dataset names
-    closest_datasets_st = [k for k, v in dataset_path_map.items() if v in closest_matches_st]
+    closest_datasets_st = [
+        k for k, v in dataset_path_map.items() if v in closest_matches_st
+    ]
 
     closest_matches_sc = difflib.get_close_matches(orig_sc_string, dataset_map.values())
     closest_datasets_sc = [k for k, v in dataset_map.items() if v in closest_matches_sc]
@@ -228,26 +235,46 @@ def results_to_df(
     return all_cellwise_results, all_samplewise_results
 
 
+def extract_identifier_values(
+    runs,
+    identifiers,
+):
+    id_values = []
+    for id in identifiers:
+        sub_id_values = []
+        for run in runs:
+            if id not in run.config:
+                sub_id_values.append("None")
+            elif run.config[id] is None:
+                sub_id_values.append("default")
+            else:
+                sub_id_values.append(run.config[id])
+        id_values.append(sub_id_values)
+    return id_values
+
+
 def eval_runs(
     runs,
     dataset_map,
     identifiers,
+    step=None,
     verbose=0,
 ):
     run_names = [run.name for run in runs]
     run_tags = [run.tags for run in runs]
-    results = [get_result_for_run(run, verbose=verbose) for run in tqdm(runs)]
+    results = [get_result_for_run(run, verbose=verbose, step=step) for run in tqdm(runs)]
     dataset_names = [
         extract_dataset_name(run.config["data/reference_dir"], dataset_map)
         for run in runs
     ]
-    id_values = [
-        [
-            run.config[identifier] if run.config[identifier] is not None else "default"
-            for run in runs
-        ]
-        for identifier in identifiers
-    ]
+    # id_values = [
+    #     [
+    #         run.config[identifier] if run.config[identifier] is not None else "default"
+    #         for run in runs
+    #     ]
+    #     for identifier in identifiers
+    # ]
+    id_values = extract_identifier_values(runs, identifiers)
     id_values_dict = {
         identifier: values for identifier, values in zip(identifiers, id_values)
     }
@@ -290,7 +317,7 @@ def aggregate_and_combine_results(
 def evaluation_pipeline(
     dataset_map,
     dataset_path_map,
-    id_values, 
+    id_values,
     name=None,
     baseline_tag="latest",
     extra_tag="ablation",
@@ -302,6 +329,7 @@ def evaluation_pipeline(
     dataset_filter=None,
     save_path=None,
     return_all_dfs=False,
+    step=None,
     **plot_kwargs,
 ):
     # load specific results
@@ -321,7 +349,7 @@ def evaluation_pipeline(
     )
 
     results, dataset_names, method_names, methods_df = eval_runs(
-        runs, dataset_map, identifiers
+        runs, dataset_map, identifiers, step=step
     )
 
     if extra_results is not None:
@@ -335,7 +363,7 @@ def evaluation_pipeline(
         dataset_names += extra_dataset_names
         method_names += extra_method_names
         results += extra_results
-    
+
     # compute big result dataframes
     all_cellwise_results, all_samplewise_results = results_to_df(
         results,
@@ -355,29 +383,35 @@ def evaluation_pipeline(
     method_names = methods_df["method"].unique()
     special_names = []
     for id, vals in id_values.items():
+        local_vals = []
         for val in vals:
             sub_df = methods_df[methods_df[id] == val]
             if len(sub_df) > 0:
                 special_names.append(sub_df["method"].unique()[0])
+                local_vals.append(val)
         if name is None:
             local_name = id
         else:
             local_name = name
         special_mapping = {
             special_name: f"{local_name}: {val}"
-            for special_name, val in zip(special_names, vals)
+            for special_name, val in zip(special_names, local_vals)
         }
-        
+
     print(f"Number of special names: {len(special_names)}")
-    base_method = list(set(method_names) - set(special_names) - set(extra_method_names))[0]
+    base_method = list(
+        set(method_names) - set(special_names) - set(extra_method_names)
+    )[0]
     base_identifier_value = methods_df.loc[
         methods_df["method"] == base_method, identifiers[0]
     ].values[0]
 
     if name is None:
-        base_mapping = {base_method: f"Baseline"}
+        base_mapping = {base_method: f"MultiChannelGNN"}
     else:
-        base_mapping = {base_method: f"Baseline ({name.lower()}: {base_identifier_value})"}
+        base_mapping = {
+            base_method: f"MultiChannelGNN ({name.lower()}: {base_identifier_value})"
+        }
     method_mapping = {
         **base_mapping,
         **special_mapping,
@@ -419,13 +453,14 @@ def evaluation_pipeline(
 
     # table form
     tabular_results = (
-        mean_results
-        .groupby("Method")
+        mean_results.groupby("Method")
         .mean(numeric_only=True)
         .drop(columns="Fold")
         .reset_index()
     )
-    tabular_results_per_dataset = mean_results.groupby(["Method", "dataset"]).mean().drop(columns="Fold")
+    tabular_results_per_dataset = (
+        mean_results.groupby(["Method", "dataset"]).mean().drop(columns="Fold")
+    )
     # replace method name
     tabular_results["Method"] = tabular_results["Method"].replace(method_mapping)
     tabular_results = tabular_results.set_index("Method")
