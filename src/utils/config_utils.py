@@ -1,5 +1,8 @@
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
+import hydra
+from hydra import initialize, initialize_config_module, initialize_config_dir, compose
+from hydra.core.hydra_config import HydraConfig
 
 
 def print_config(cfg):
@@ -37,7 +40,7 @@ def convert_wandb_to_dict_config(run_config):
             # remove / from keys and replace by dots
             dotted_cleaned_run_config.append(f"{k.replace('/', '.')}={v}")
     processed_run_config = OmegaConf.from_dotlist(dotted_cleaned_run_config)
-    
+
     # extract net entries if necessary
     net_in_config = False
     for k in run_config.keys():
@@ -55,10 +58,34 @@ def convert_wandb_to_dict_config(run_config):
         processed_run_config.net = new_net_config
     return processed_run_config
 
+
 def prepare_config(base_config, run_config):
     processed_run_config = convert_wandb_to_dict_config(run_config)
 
     config = update_config(base_config, processed_run_config)
     config = convert_nones(config)
     config.paths.output_dir = config.paths.log_dir
+    return config
+
+
+def load_base_config(
+    experiment_name=None,
+    config_path="../configs",
+    config_name="train.yaml",
+    overrides=[],
+):
+    if experiment_name is not None:
+        overrides.extend([f"experiment={experiment_name}"])
+
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    initialize(version_base="1.3", config_path=config_path)
+    config = compose(
+        config_name=config_name,
+        overrides=overrides,
+        return_hydra_config=True,
+    )
+    HydraConfig.instance().set_config(config)
+    OmegaConf.set_struct(config, False)
+    del config["hydra"]
+    config.experiment = experiment_name
     return config
