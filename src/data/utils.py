@@ -1,6 +1,8 @@
 import numpy as np
 import scanpy as sc
 import pandas as pd
+from scipy.sparse import csr_matrix, coo_matrix, csc_matrix
+import anndata as ad
 
 
 def load_spatial_data(st_path="data/V1_Mouse_Brain_Sagittal_Anterior.h5ad"):
@@ -145,10 +147,10 @@ def get_paths_for_training(
     )
     experiment_paths = [path[1::] for path in experiment_paths]
     st_paths = ["${paths.data_dir}" + f for f in st_data_files]
-    
+
     if use_old_experiment_paths and experiment_dirs is None:
         print("No experiment_dirs provided, using default")
-    
+
     if use_old_experiment_paths and experiment_dirs is not None:
         experiment_paths_slice = [
             "${paths.root_dir}" + "/" + path
@@ -175,3 +177,44 @@ def get_dataset_map(experiment_paths, dataset_names):
 def get_dataset_path_map(st_paths, dataset_names):
     dataset_path_map = {name: path for name, path in zip(dataset_names, st_paths)}
     return dataset_path_map
+
+
+def sparse_to_array(X):
+    if isinstance(X, csr_matrix) or isinstance(X, csc_matrix):
+        return X.toarray()
+    elif isinstance(X, np.ndarray):
+        return X
+    else:
+        raise ValueError("X must be either a numpy array or a sparse matrix")
+
+
+def filter_genes(adata, min_var=0.0):
+    X_df = pd.DataFrame(
+        adata.X, index=adata.obs.index.tolist(), columns=adata.var_names.tolist()
+    ).T
+    genes_to_keep = X_df.var(axis=1) > min_var
+    adata = adata[:, genes_to_keep]
+    return adata
+
+
+def make_var_names_unique(adata, join: str = "-", aggregation: str = None):
+    if aggregation is not None:
+        X_df = pd.DataFrame(
+            adata.X, index=adata.obs.index.tolist(), columns=adata.var_names.tolist()
+        )
+        # support different aggregations on duplicate var names
+        if aggregation == "first":
+            adata = adata[:, ~X_df.columns.duplicated(keep="first")]
+        elif aggregation == "last":
+            adata = adata[:, ~X_df.columns.duplicated(keep="last")]
+        elif aggregation == "mean":
+            X_df = X_df.groupby(X_df.columns, axis=1).mean()
+            adata = adata[:, X_df.columns]
+            adata.X = X_df.values
+        elif aggregation == "sum":
+            X_df = X_df.groupby(X_df.columns, axis=1).sum()
+            adata = adata[:, X_df.columns]
+            adata.X = X_df.values
+    else:
+        adata.var_names_make_unique(join=join)
+    return adata
