@@ -19,6 +19,7 @@ outputs/
 logs/
 wandb/
 checkpoints/
+artifacts/
 figures/
 
 .vscode
