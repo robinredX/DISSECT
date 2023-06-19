@@ -6,37 +6,73 @@ import numpy as np
 import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data
 
+from scipy.sparse import csr_matrix, coo_matrix
+
 from src.data.graph_utils import (
     construct_spatial_graph,
     construct_networkx_graph,
     normalize_coords,
 )
+from src.data.utils import sparse_to_array
 
 
-def get_spatial_train_and_test_set(
-    st_data, X_real, X_sim, y_sim, radius, p=0.0, y_real=None, num_samples=32
-):
-    train_data = SpatialDISSECTDataset(
-        st_data,
-        X_real,
-        X_sim,
+class DiSpatialGraphDataset(Dataset):
+    """
+    Dataset for multiple graphs.
+    """
+
+    def __init__(
+        self,
+        st_data_real,
+        st_data_sim,
+        y_real,
         y_sim,
-        radius=radius,
-        p=p,
-        num_samples=num_samples,
-    )
+        radius=0.02,
+        test=False,
+    ):
+        self.st_data_real = st_data_real
+        self.st_data_sim = st_data_sim
+        self.radius = radius
+        self.test = test
+        self.graph_ids = F.one_hot(torch.arange(3)).float()
 
-    test_data = SpatialDISSECTDataset(
-        st_data,
-        X_real,
-        X_sim,
-        y_sim,
-        num_samples=1,
-        radius=radius,
-        test=True,
-        y_real=y_real,
-    )
-    return train_data, test_data
+        self.X_real = sparse_to_array(st_data_real.X)
+        self.g_real = construct_graph(
+            st_data_real, self.X_real, y_real, radius, self.graph_ids[[0]]
+        )
+
+        if self.test:
+            self.X_sim = None
+            self.g_sim = Data()
+        else:
+            self.X_sim = sparse_to_array(st_data_sim.X)
+            self.g_sim = construct_graph(
+                st_data_sim, self.X_sim, y_sim, radius, self.graph_ids[[1]]
+            )
+            assert (
+                self.X_real.shape[0] == y_real.shape[0]
+            ), "X_real and y_real must have same number of spots"
+            assert (
+                self.X_real.shape[0] == self.X_sim.shape[0]
+            ), "X_real and X_sim must have same number of spots"
+
+        self.num_spots = self.X_real.shape[0]
+
+    def __len__(self):
+        # set number of samples to allow arbitrary batch sizes
+        if self.test:
+            return 1
+        else:
+            return 1024
+
+    def __getitem__(self, idx):
+        # always retrun the same pair of graphs for now
+        # TODO: later extend this to sample a simulated graph
+        return [self.g_real, self.g_sim]
+
+    def move_to_device(self, device):
+        self.g_real = self.g_real.to(device)
+        self.g_sim = self.g_sim.to(device)
 
 
 class SpatialDISSECTDataset(Dataset):
@@ -138,6 +174,45 @@ class SpatialDISSECTDataset(Dataset):
             self.sim_base_graph = self.sim_base_graph.to(device)
         self.X_sim = self.X_sim.to(device)
         self.y_sim = self.y_sim.to(device)
+
+
+def construct_graph(st_data, X, y=None, radius=0.02, graph_id=None):
+    coords, dist_mat, adj_mat = construct_spatial_graph(
+        st_data.obsm["spatial"].copy(), radius=radius
+    )
+    graph = construct_networkx_graph(coords, dist_mat, adj_mat, X)
+    graph = pyg_utils.from_networkx(graph)
+    if y is not None:
+        graph.y = torch.Tensor(y)
+    if graph_id is not None:
+        graph.id = graph_id.expand(graph.num_nodes, -1)
+    return graph
+
+
+def get_spatial_train_and_test_set(
+    st_data, X_real, X_sim, y_sim, radius, p=0.0, y_real=None, num_samples=32
+):
+    train_data = SpatialDISSECTDataset(
+        st_data,
+        X_real,
+        X_sim,
+        y_sim,
+        radius=radius,
+        p=p,
+        num_samples=num_samples,
+    )
+
+    test_data = SpatialDISSECTDataset(
+        st_data,
+        X_real,
+        X_sim,
+        y_sim,
+        num_samples=1,
+        radius=radius,
+        test=True,
+        y_real=y_real,
+    )
+    return train_data, test_data
 
 
 def prepare_dataset(

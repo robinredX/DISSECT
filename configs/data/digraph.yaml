@@ -1,0 +1,12 @@
+_target_: src.data.datamodule_digraph.DiSpatialDataModule
+st_path_real: ${paths.data_dir}/spatial/simulations_kidney_slideSeq_v2/UMOD-WT.WT-2a_resolution75.h5ad
+st_path_sim: ${paths.root_dir}/../deconvolution/simulation/slideseqv2_mouse_kidney_2a/st_data_gen_adjusted.h5ad
+radius: 0.02
+target_sum: 1.0e+6
+var_cutoff: 0.1
+duplicate_aggregation: "first"
+train_batch_size: 1
+val_batch_size: 1
+num_workers: 0
+pin_memory: False
+log_hparams: False

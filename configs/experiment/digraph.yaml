@@ -4,10 +4,6 @@
 # python train.py experiment=example
 
 defaults:
+  - override /data: digraph.yaml
   - override /net: multi_channel.yaml
   - override /trainer: default.yaml
-  - override/data: default.yaml
-
-trainer:
-  devices:
-    - 6

@@ -14,7 +14,7 @@ experiment*/
 !configs/experiment
 
 # other folders to ignore
-data/
+data/**
 outputs/
 logs/
 wandb/

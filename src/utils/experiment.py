@@ -10,8 +10,6 @@ from src.train import train
 
 def run_experiment(
     exp_config: DictConfig,
-    st_path,
-    reference_dir,
     experiment_name=None,
     project="dissect-spatial",
     wandb_mode="disabled",
@@ -24,18 +22,19 @@ def run_experiment(
     plotting=False,
     print_config=False,
     progress_bar=True,
+    overrides=[],
 ):
     assert isinstance(exp_config, DictConfig)
     # configure overrides
+    
+    if experiment_name is not None:
+        exp_name = experiment_name
+        overrides.extend([f"experiment={exp_name}"])
     if "experiment" in exp_config:
         exp_name = exp_config["experiment"]
-        overrides = [f"experiment={exp_name}"]
-    elif experiment_name is not None:
-        exp_name = experiment_name
-        overrides = [f"experiment={exp_name}"]
+        overrides.extend([f"experiment={exp_name}"])
     else:
         exp_name = None
-        overrides = []
     # load base config
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     initialize(version_base="1.3", config_path=config_path)
@@ -47,14 +46,14 @@ def run_experiment(
     HydraConfig.instance().set_config(config)
     OmegaConf.set_struct(config, False)
     del config["hydra"]
+    config.experiment = exp_name
+    
 
     # set extra values
+    exp_config.paths = config.paths
     config = update_config(config, exp_config)
     config = convert_nones(config)
     config.paths.output_dir = config.paths.log_dir
-
-    config.data.st_path = st_path
-    config.data.reference_dir = reference_dir
     
     # configure more for training
     if not progress_bar:
