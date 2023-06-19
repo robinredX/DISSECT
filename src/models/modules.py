@@ -252,6 +252,7 @@ class DeconvolutionModel(pl.LightningModule):
             self.log("validation/mean_rmse_", mean_rmse)
             self.log("validation/mean_corr_", mean_corr)
             self.log("validation/mean_ccc_", mean_ccc)
+            print(f"Epoch: {self.current_epoch}, mean_rmse: {mean_rmse}, mean_corr: {mean_corr}, mean_ccc: {mean_ccc}")
 
         if self.save_predictions:
             print("Saving predictions...")
