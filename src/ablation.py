@@ -26,82 +26,82 @@ from src.data.datasets import *
 from src.utils.wandb import *
 from src.utils.config_utils import *
 from src.utils.experiment import run_experiment
+from src.utils.data_paths_valid import get_paths_for_training
 
 # define ablation settings
 ablation_settings = {
-    # "data": {
-    #     "radius": [0.01, 0.03, 0.04],
-    # },
-    # "net": {
-        # "activation": [
-        #     "mish",
-        #     "tanh",
-        #     "softplus",
-        #     "silu",
-        #     "selu",
-        #     "rrelu",
-        #     "prelu",
-        #     "celu",
-        #     "gelu",
-        #     "softsign",
-        #     "softshrink",
-        #     "hardswish",
-        #     "hardshrink",
-        #     "hardtanh",
-        # ],
-    #     # "latent_dim": [64, 128, 512],
-    #     # "activation": ["relu", "leaky_relu", "elu"],
-    #     # "use_pos": [True],
-    # },
-    # "encoder": {
-    #     # "num_heads": [1, 2, 4],
-    #     # "inter_skip": [False],
-    #     # "mha_channel": [False],
-    #     # "lin_channel": [False],
-    #     # "spatial_channel": [False],
-    #     # "num_layers": [2, 3],
-    #     "plain_last": [True],
-    #     "use_ffn": [True],
-    #     "fusion": ["concat", "gating", "concat_simple"],
-    #     "use_pos": [True],
-    # },
+    "data": {
+        "radius": [0.01, 0.03, 0.04, 0.05],
+    },
+    "net": {
+        # "activation": ["relu6"],
+        "latent_dim": [128, 512],
+        "use_pos": [True],
+    },
+    "encoder_kwargs": {
+        "num_heads": [1, 2, 8],
+        "inter_skip": [False],
+        "mha_channel": [False],
+        "lin_channel": [False],
+        "spatial_channel": [False],
+        "num_layers": [2, 3],
+        "plain_last": [True],
+        "fusion": ["concat", "gating", "concat_simple"],
+        "use_pos": [True],
+    },
+    "spatial_channel_kwargs": {
+        # "activation": ["elu"],
+        # "plain_last": [False],
+        "num_layers": [2],
+    },
+    "mha_channel_kwargs": {
+        "num_layers": [2],
+        # "activation": ["elu"],
+    },
     "model": {
         # "l2_lambda": [0.0, 1e-5, 1e-7],
-        # "beta": [0.0, 7.5],
-        # "alpha_max": [0.1, 0.3, 0.4, 0.5],
-        # "alpha_max": [0.5],
-        "learning_rate": [5e-5, 1e-6],
+        "alpha_max": [0.1, 0.3, 0.4, 0.5],
+        "beta": [0.0, 7.5, "v2", "v3"],
+        # "learning_rate": [5e-5, 1e-6],
     },
 }
 
 if __name__ == "__main__":
-    st_data_files = [
-        "spatial/simulations_kidney_slideSeq_v2/UMOD-WT.WT-2a_resolution75.h5ad",
-        "spatial/simulations_kidney_slideSeq_v2/UMOD-KI.KI-4b_resolution105.h5ad",
-        "spatial/simulations_heart_seqFISH/embryo1_resolution0.11.h5ad",
-        "spatial/simulations_heart_seqFISH/embryo2_resolution0.11.h5ad",
-        "spatial/simulations_heart_seqFISH/embryo3_resolution0.11.h5ad",
-        "spatial/V1_Mouse_Brain_Sagittal_Anterior.h5ad",
-        "spatial/lymph_node/st_lymph.h5ad",
-    ]
-    experiment_dirs = [
-        "experiments/experiment_kidney_slideSeq_v2_UMOD-WT.WT-2a_resolution75",
-        "experiments/experiment_kidney_slideSeq_v2_105",
-        "experiments/experiment_heart_seqFISH/embryo1_resolution0.11",
-        "experiments/experiment_heart_seqFISH/embryo2_resolution0.11",
-        "experiments/experiment_heart_seqFISH/embryo3_resolution0.11",
-        "experiments/experiment_mouse_st",
-        "experiments/experiment_lymph_node"
-    ]
-    st_paths = ["${paths.data_dir}" + f for f in st_data_files]
-    experiment_paths = ["${paths.root_dir}" + "/" + dir for dir in experiment_dirs]
+    # st_data_files = [
+    #     "spatial/simulations_kidney_slideSeq_v2/UMOD-WT.WT-2a_resolution75.h5ad",
+    #     "spatial/simulations_kidney_slideSeq_v2/UMOD-KI.KI-4b_resolution105.h5ad",
+    #     "spatial/simulations_heart_seqFISH/embryo1_resolution0.11.h5ad",
+    #     "spatial/simulations_heart_seqFISH/embryo2_resolution0.11.h5ad",
+    #     # "spatial/simulations_heart_seqFISH/embryo3_resolution0.11.h5ad",
+    #     "spatial/simulations_hypothalamus_MERFISH/0_resolution0.04.h5ad",
+    #     "spatial/simulations_hypothalamus_MERFISH/1_resolution0.04.h5ad",
+    #     # "spatial/V1_Mouse_Brain_Sagittal_Anterior.h5ad",
+    #     # "spatial/lymph_node/st_lymph.h5ad",
+    # ]
+    # experiment_dirs = [
+    #     "experiments/experiment_kidney_slideSeq_v2_UMOD-WT.WT-2a_resolution75",
+    #     "experiments/experiment_kidney_slideSeq_v2_105",
+    #     "experiments/experiment_heart_seqFISH/embryo1_resolution0.11",
+    #     "experiments/experiment_heart_seqFISH/embryo2_resolution0.11",
+    #     # "experiments/experiment_heart_seqFISH/embryo3_resolution0.11",
+    #     "experiments/experiment_hypothalamus_MERFISH/0_resolution0.04",
+    #     "experiments/experiment_hypothalamus_MERFISH/1_resolution0.04",
+    #     # "experiments/experiment_mouse_st",
+    #     # "experiments/experiment_lymph_node"
+    # ]
+    # st_paths = ["${paths.data_dir}" + f for f in st_data_files]
+    # experiment_paths = ["${paths.root_dir}" + "/" + dir for dir in experiment_dirs]
+    st_paths, experiment_paths = get_paths_for_training()
+    st_paths = st_paths[-6::]
+    experiment_paths = experiment_paths[-6::]
 
-    run_name = "electric-sweep-37"
-    config = get_run_config(run_name, project="DISSECT-src")
+    run_name = "electric-field-1"
+    run_name = "eager-wind-245"
+    config = get_run_config(run_name, project="multi-channel-gnn")
     config = convert_wandb_to_dict_config(config)
     config.experiment = "multi_channel"
 
-    tags = ["ablation-study", "ablation-study-2"]
+    tags = ["ablation-hard"]
 
     wandb_mode = "online"
     if wandb_mode == "online":
@@ -115,14 +115,19 @@ if __name__ == "__main__":
         for entry, values in entries.items():
             for value in values:
                 config_copy = copy.deepcopy(config)
+                # TODO: write function to resolve config changes
                 if setting == "data":
                     config_copy.data[entry] = value
                 if setting == "net":
                     config_copy.net[entry] = value
-                if setting == "encoder":
+                if setting == "encoder_kwargs":
                     config_copy.net.encoder_kwargs[entry] = value
                 if setting == "model":
                     config_copy.model[entry] = value
+                if setting == "spatial_channel_kwargs":
+                    config_copy.net.encoder_kwargs.spatial_channel_kwargs[entry] = value
+                if setting == "mha_channel_kwargs":
+                    config_copy.net.encoder_kwargs.mha_channel_kwargs[entry] = value
                 for st_path, experiment_path in list(zip(st_paths, experiment_paths))[
                     0::
                 ]:
@@ -140,6 +145,7 @@ if __name__ == "__main__":
                         progress_bar=False,
                         device=6,
                         save_predictions=True,
+                        project="multi-channel-gnn"
                     )
                     del metric_dict, object_dict
                     gc.collect()
