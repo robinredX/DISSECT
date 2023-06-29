@@ -130,7 +130,13 @@ def extract_dataset_name(string, dataset_map):
 
 
 def get_dataset_name_for_run(
-    run, dataset_map, dataset_path_map, st_ident="st_path", sc_ident="sc_path"
+    run,
+    dataset_map,
+    dataset_path_map,
+    st_ident="st_path",
+    sc_ident="sc_path",
+    n=3,
+    cutoff=0.6,
 ):
     orig_sc_string = run.config[sc_ident]
     orig_st_string = run.config[st_ident]
@@ -139,19 +145,55 @@ def get_dataset_name_for_run(
         orig_st_string, dataset_path_map.values()
     )
     # get corresponding dataset names
-    closest_datasets_st = [
-        k for k, v in dataset_path_map.items() if v in closest_matches_st
-    ]
+    # closest_datasets_st = [
+    #     k for k, v in dataset_path_map.items() if v in closest_matches_st
+    # ]
+    closest_datasets_st = sum(
+        [get_keys_for_value(dataset_path_map, match) for match in closest_matches_st],
+        [],
+    )
 
-    closest_matches_sc = difflib.get_close_matches(orig_sc_string, dataset_map.values())
-    closest_datasets_sc = [k for k, v in dataset_map.items() if v in closest_matches_sc]
-    # print(closest_datasets_st)
-    # print(closest_datasets_sc)
+    closest_matches_sc = difflib.get_close_matches(
+        orig_sc_string, dataset_map.values(), n=n, cutoff=cutoff
+    )
+    # closest_datasets_sc = [k for k, v in dataset_map.items() if v in closest_matches_sc]
+    closest_datasets_sc = sum(
+        [get_keys_for_value(dataset_map, match) for match in closest_matches_sc], []
+    )
+
     # get overlapping dataset
-    closest_datasets = list(set(closest_datasets_st).intersection(closest_datasets_sc))
+    # closest_datasets = list(set(closest_datasets_st).intersection(closest_datasets_sc))
+    closest_datasets = [
+        dataset_st
+        for dataset_st in closest_datasets_st
+        if dataset_st in closest_datasets_sc
+    ]
     # print(closest_datasets)
-    assert len(closest_datasets) == 1, "Found more than one dataset for run"
+    if len(closest_datasets) == 0:
+        print(f"Could not find dataset for run {run.name}")
+        print("matches sc", closest_matches_sc)
+        print("matches st", closest_matches_st)
+        print("sc", closest_datasets_sc)
+        print("st", closest_datasets_st)
+
+    if len(closest_datasets) > 1:
+        print(f"Found more than one dataset for run {run.name}")
+        # print("matches sc", closest_matches_sc)
+        # print("matches st", closest_matches_st)
+        # print("sc", closest_datasets_sc)
+        # print("st", closest_datasets_st)
     return closest_datasets[0]
+
+
+def get_keys_for_value(dictionary, value):
+    keys = []
+    for key, val in dictionary.items():
+        if val == value:
+            keys.append(key)
+    if len(keys) > 0:
+        return keys
+    else:
+        raise ValueError(f"Could not find key for value {value}")
 
 
 def filter_data_by_dataset(dataset, dataset_names, data_list):
@@ -262,7 +304,9 @@ def eval_runs(
 ):
     run_names = [run.name for run in runs]
     run_tags = [run.tags for run in runs]
-    results = [get_result_for_run(run, verbose=verbose, step=step) for run in tqdm(runs)]
+    results = [
+        get_result_for_run(run, verbose=verbose, step=step) for run in tqdm(runs)
+    ]
     dataset_names = [
         extract_dataset_name(run.config["data/reference_dir"], dataset_map)
         for run in runs
