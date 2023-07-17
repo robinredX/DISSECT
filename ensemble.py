@@ -25,7 +25,7 @@ def ensemble(config):
             df_ens = df_curr
         else:
             df_ens = df_ens + df_curr
-    df_ens = df_ens / len(config["seeds"])
+    df_ens = df_ens / len(config["models"])
     savepath = os.path.join(config["experiment_folder"], "dissect_fractions_ens.txt")
     print("Ensemble predictions are saved to {}".format(savepath))
     df_ens.to_csv(savepath, sep="\t")

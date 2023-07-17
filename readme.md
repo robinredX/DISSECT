@@ -48,4 +48,6 @@ Run `python explain.py`
 
 The outputs (Expected values per celltype, Raw shapely values as a numpy pickle file and plots of shap values per celltype) will be stored at `shap` in the `experiment_folder`.
 
+# Step 4. Cell type specific gene expression per sample
 
+Run `python dissect_expr.py`. It uses same config file as before. Please note that dependending on the number of cell types, this step can take quite some time. Use of GPU is recommended.
