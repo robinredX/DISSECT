@@ -164,6 +164,7 @@ class Simulate(object):
 
         adata = AnnData(
             np.zeros((self.config["n_samples"], len(genes))),
+            dtype=np.float32,
             var=pd.DataFrame(index=genes),
             obs=pd.DataFrame(self.props, columns=self.celltypes),
         )
