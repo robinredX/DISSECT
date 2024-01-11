@@ -111,7 +111,7 @@ def dataset(config):
     # Normalization
     if config["normalize_test"] == "cpm":
         X_real_anndata = AnnData(
-            np.array(X_real), var=pd.DataFrame(index=X_real.columns.tolist())
+            np.array(X_real, dtype=np.float32), var=pd.DataFrame(index=X_real.columns.tolist())
         )
         sc.pp.normalize_total(X_real_anndata, target_sum=1e6)
         X_real = pd.DataFrame(
